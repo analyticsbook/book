@@ -136,7 +136,7 @@ prox <- rf$proximity
 clusters <- pam(prox, 2)
 data <- as.data.frame(data)
 data$cluster <- as.character(clusters$clustering)
-ggplot(data, aes(x = V1, y = V2, color = cluster)) 
-+ geom_point() + labs(title = 'Data points')
+ggplot(data, aes(x = V1, y = V2, color = cluster)) +
+  geom_point() + labs(title = 'Data points')
 ```
 

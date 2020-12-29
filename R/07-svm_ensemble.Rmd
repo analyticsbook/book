@@ -193,6 +193,10 @@ svm.tune
 ```{r eval=TRUE, tidy = FALSE}
 theme_set(theme_gray(base_size = 15))
 
+library(randomForest)
+library(gbm)
+library(rpart)
+library(dplyr)
 library(RCurl)
 url <- paste0("https://raw.githubusercontent.com",
               "/analyticsbook/book/main/data/AD.csv")

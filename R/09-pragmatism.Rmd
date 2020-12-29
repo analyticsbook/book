@@ -101,6 +101,20 @@ mse <- mean((true_y - y_hat)^2)
 print(mse)
 ```
 
+```{r}
+# Write a simulator to generate dataset with one predictor and one outcome
+# from a polynomial regression model
+require(splines)
+seed <- rnorm(1)
+set.seed(seed)
+gen_data <- function(n, coef, v_noise) {
+  eps <- rnorm(n, 0, v_noise)
+  x <- sort(runif(n, 0, 100))
+  X <- cbind(1,ns(x, df = (length(coef) - 1)))
+  y <- as.numeric(X %*% coef + eps)
+  return(data.frame(x = x, y = y))
+}
+```
 
 ```{r eval=TRUE}
 # Simulate one batch of data
@@ -115,6 +129,10 @@ tempData <- gen_data(n_train, coef, v_noise)
 
 
 ```{r eval=TRUE}
+# Fit the data using linear regression model
+x <- tempData[, "x"]
+y <- tempData[, "y"]
+X <- cbind(1, ns(x, df = (length(coef) - 1)))
 # Plot the true model
 plot(y ~ x, col = "gray", lwd = 2)
 lines(x, X %*% coef, lwd = 3, col = "black")
@@ -122,6 +140,7 @@ lines(x, X %*% coef, lwd = 3, col = "black")
 
 
 ```{r eval=TRUE, tidy = FALSE}
+plot(y ~ x, col = "gray", lwd = 2)
 lines(ksmooth(x,y, "normal", bandwidth=2),lwd = 3,
       col = "darkorange")
 lines(ksmooth(x,y, "normal", bandwidth=5),lwd = 3,

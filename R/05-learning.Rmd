@@ -150,15 +150,16 @@ lines(x, X %*% coef, lwd = 3, col = "black")
 # degrees of freedom (df)
 fit <- apply(t(df), 2, function(degf) lm(y ~ ns(x, df = degf)))
 # Plot the models
+plot(y ~ x, col = "gray", lwd = 2)
 lines(x, fitted(fit[[1]]), lwd = 3, col = "darkorange")
 lines(x, fitted(fit[[4]]), lwd = 3, col = "dodgerblue4")
 # lines(x, fitted(fit[[10]]), lwd = 3, col = "darkorange")
 lines(x, fitted(fit[[20]]), lwd = 3, col = "forestgreen")
-legend(x = "topleft", legend = c("True function",
+legend(x = "topright", legend = c("True function",
       "Linear fit (df = 1)", "Best model (df = 4)",
       "Overfitted model (df = 15)","Overfitted model (df = 20)"),
       lwd = rep(3, 4), col = c("black", "darkorange", "dodgerblue4",
-      "forestgreen"), text.width = 32, cex = 0.85)
+      "forestgreen"), text.width = 32, cex = 0.6)
 ```
 
 
@@ -197,9 +198,9 @@ points(df[which.min(te)], te[which.min(te)], col = "darkorange",
        pch = 16,cex = 1.5)
 points(df[15], mse[15], col = "steelblue", pch = 15, cex = 1.5)
 points(df[15], te[15], col = "steelblue", pch = 15, cex = 1.5)
-legend(x = "center", legend = c("Training error", "Test error"),
-lwd = rep(2, 2), col = c(gray(0.4), "orange3"), text.width = 0.3,
-      cex = 1.2)
+legend(x = "top", legend = c("Training error", "Test error"),
+lwd = rep(2, 2), col = c(gray(0.4), "orange3"), text.width = 0.5,
+      cex = 0.8)
 ```
 
 

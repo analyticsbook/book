@@ -28,23 +28,20 @@ data.test <- data[-train.ix,]
 # Step 3 -> gather a list of candidate models
 
 # NN model with one hidden layer and different # of nodes
-
-# model1: neuralnet(y~x, data=data, hidden=c(3)) 
-# model2: neuralnet(y~x, data=data, hidden=c(5)) 
-# model3: neuralnet(y~x, data=data, hidden=c(8)) 
+#model1 <- neuralnet(y~x, data=data.train, hidden=c(3)) 
+#model2 <- neuralnet(y~x, data=data.train, hidden=c(5)) 
+#model3 <- neuralnet(y~x, data=data.train, hidden=c(8)) 
 ```
 
 
 ```{r eval=TRUE, tidy=FALSE}
 # Step 4 -> cross-validation for model evaluation 
-
+library(neuralnet)
 n_folds = 10 # number of folds
 # the sample size, N, of the dataset
 N <- dim(data.train)[1] 
 
-
 folds_i <- sample(rep(1:n_folds, length.out = N)) 
-library(neuralnet)
 
 # cv_mse records the prediction error for each fold
 cv_mse <- NULL 
@@ -74,6 +71,16 @@ mean(cv_mse)
 ```{r eval=TRUE, tidy=FALSE}
 # Use visual inspection to assist the model selection. 
 
+# sort training data according to x 
+# so we can use the plotting function line later
+data.train <- data.train[order(data.train$x),]
+
+
+# train models with training data
+model1 <- neuralnet(y~x, data=data.train, hidden=c(3)) 
+model2 <- neuralnet(y~x, data=data.train, hidden=c(5)) 
+model3 <- neuralnet(y~x, data=data.train, hidden=c(8)) 
+
 # Predict on the testing data using the trained model
 pred <- compute(model1, data.train)  
 y_hat <- pred$net.result
@@ -86,7 +93,6 @@ model2$y_hat <- y_hat
 pred <- compute(model3, data.train) 
 y_hat <- pred$net.result
 model3$y_hat <- y_hat
-
 
 plot(y ~ x, data = data.train, col = "gray", lwd = 2)
 lines(data.train$x, model1$y_hat,lwd = 3, col = "darkorange")
@@ -102,7 +108,7 @@ legend(x = "topright", legend = c("NN (3 hidden nodes)",
 ```{r eval=TRUE, tidy=FALSE}
 # Step 5 -> After model selection, build your final model
 nn.final <- neuralnet(y~x, data=data.train, hidden=c(5)) # 
-plot(fit) # Draw the architecture of the NN model
+plot(nn.final) # Draw the architecture of the NN model
 
 ```
 
@@ -122,8 +128,8 @@ print(mse)
 
 
 ```{r eval=TRUE, tidy=FALSE}
-install.packages("devtools") # install devtools
-devtools::install_github("rstudio/keras") # install Keras
+#install.packages("devtools") # install devtools
+#devtools::install_github("rstudio/keras") # install Keras
 ```
 
 
@@ -424,9 +430,15 @@ print(cbind(ID = 1:nrow(rules.present),
 
 
 ```{r eval=TRUE, tidy = FALSE}
+# install.packages("BiocManager")
+# BiocManager::install("EBImage")
+
 library(EBImage)
-readImage(system.file("images", "sample-color.png", 
+img <- readImage(system.file("images", "sample-color.png", 
                       package="EBImage"))
+
+grayimage<-channel(img,"gray")
+display(grayimage)
 ```
 
 

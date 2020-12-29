@@ -47,7 +47,7 @@ testY <- as.matrix(data.test[,1])
 require(glmnet)
 fit = glmnet(trainX,trainY, family=c("gaussian"))
 
-print(fit$beta) 
+head(fit$beta) 
 # The fitted sparse regression parameters under 
 # different lambda values are stored in fit$beta.
 ```
@@ -92,7 +92,7 @@ mse
 # Step 7 -> Re-fit the regression model with selected variables 
 # by LASSO
 var_idx <- which(coef(cv.fit, s = "lambda.min") != 0)
-lm.AD.reduced <- lm(MMSCORE ~ ., data = data.train[,var_idx])
+lm.AD.reduced <- lm(MMSCORE ~ ., data = data.train[,var_idx,drop=FALSE])
 summary(lm.AD.reduced)
 ```
 
@@ -215,7 +215,7 @@ mse
 ```{r eval=TRUE}
 # Projection of data points in the new space defined by 
 # the first two PCs
-fviz_pca_ind(pca.AD, label="none", habillage=AD[train.ix,]$DX_bl,
+fviz_pca_ind(pca.AD, label="none", habillage=as.factor(AD[train.ix,]$DX_bl),
              addEllipses=TRUE, ellipse.level=0.95)
 ```
 
