@@ -1,0 +1,389 @@
+
+\chapter{Chapter 7: Learning (II) \newline \textit{SVM \& Ensemble Learning}}
+
+
+```{r eval=FALSE}
+# For the toy problem
+x = matrix(c(-1,-1,1,1,-1,1,-1,1), nrow = 4, ncol = 2)
+y = c(-1,1,1,-1)
+linear.train <- data.frame(x,y)
+
+# Visualize the distribution of data points of two classes
+require( 'ggplot2' )
+p <- qplot( data=linear.train, X1, X2, 
+            colour=factor(y),xlim = c(-1.5,1.5), 
+            ylim = c(-1.5,1.5))
+p <- p + labs(title = "Scatterplot of data points of two classes")
+print(p)
+```
+
+
+```{r eval=FALSE}
+# Train a nonlinear SVM model 
+# polynomial kernel function with `df=2`
+x <- cbind(1, poly(x, degree = 2, raw = TRUE))
+coefs = c(1,sqrt(2),1,sqrt(2),sqrt(2),1)
+x <- x * t(matrix(rep(coefs,4),nrow=6,ncol=4))
+linear.train <- data.frame(x,y)
+require( 'kernlab' )
+linear.svm <- ksvm(y ~ ., data=linear.train, 
+                   type='C-svc', kernel='vanilladot', C=10, scale=c())
+```
+
+
+```{r eval=FALSE}
+alpha(linear.svm) #scaled alpha vector
+## [[1]]
+## [1] 0.125 0.125 0.125 0.125
+```
+
+
+```{r eval=FALSE}
+# Step 1 -> Read data into R workstation
+
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+data <- read.csv(text=getURL(url))
+
+# Step 2 -> Data preprocessing
+# Create X matrix (predictors) and Y vector (outcome variable)
+X <- data[,2:16]
+Y <- data$DX_bl
+
+Y <- paste0("c", Y) 
+Y <- as.factor(Y) 
+
+data <- data.frame(X,Y)
+names(data)[16] = c("DX_bl")
+
+# Create a training data (half the original data size)
+train.ix <- sample(nrow(data),floor( nrow(data)/2) )
+data.train <- data[train.ix,]
+# Create a testing data (half the original data size)
+data.test <- data[-train.ix,]
+```
+
+
+```{r eval=FALSE}
+# Step 3 -> gather a list of candidate models
+# SVM: often to compare models with different kernels, 
+# different values of C, different set of variables
+
+# Use different set of variables
+
+model1 <- as.formula(DX_bl ~ .)
+model2 <- as.formula(DX_bl ~ AGE + PTEDUCAT + FDG 
+                     + AV45 + HippoNV + rs3865444)
+model3 <- as.formula(DX_bl ~ AGE + PTEDUCAT)
+model4 <- as.formula(DX_bl ~ FDG + AV45 + HippoNV)
+```
+
+
+```{r eval=FALSE}
+# Step 4 -> Use 10-fold cross-validation to evaluate the models
+
+n_folds = 10 
+# number of fold 
+N <- dim(data.train)[1] 
+folds_i <- sample(rep(1:n_folds, length.out = N))  
+
+# evaluate the first model
+cv_err <- NULL 
+# cv_err makes records of the prediction error for each fold
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) 
+  # In each iteration, use one fold of data as the testing data
+  data.test.cv <- data.train[test_i, ] 
+  # The remaining 9 folds' data form our training data
+  data.train.cv <- data.train[-test_i, ]   
+  require( 'kernlab' )
+  linear.svm <- ksvm(model1, data=data.train.cv, 
+                     type='C-svc', kernel='vanilladot', C=10) 
+  # Fit the linear SVM model with the training data
+  y_hat <- predict(linear.svm, data.test.cv)  
+  # Predict on the testing data using the trained model
+  true_y <- data.test.cv$DX_bl  
+  # get the the error rate
+  cv_err[k] <-length(which(y_hat != true_y))/length(y_hat) 
+}
+mean(cv_err)
+
+# evaluate the second model ...
+# evaluate the third model ...
+# ...
+```
+
+
+```{r eval = FALSE, tidy = FALSE}
+# Step 5 -> After model selection, 
+# use ksvm() function to build your final model
+linear.svm <- ksvm(model2, data=data.train,
+        type='C-svc', kernel='vanilladot', C=10) 
+```
+
+
+```{r eval=FALSE}
+# Step 6 -> Predict using your SVM model
+y_hat <- predict(linear.svm, data.test) 
+```
+
+
+```{r eval=FALSE}
+# Step 7 -> Evaluate the prediction performance of the SVM model
+
+# (1) The confusion matrix
+
+library(caret) 
+confusionMatrix(y_hat, data.test$DX_bl)
+
+# (2) ROC curve 
+library(pROC) 
+y_hat <- predict(linear.svm, data.test, type = 'decision') 
+plot(roc(data.test$DX_bl, y_hat),
+     col="blue", main="ROC Curve")
+```
+
+
+```{r eval=FALSE}
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+str(AD)
+#Train and Tune the SVM
+n = dim(AD)[1]
+n.train <- floor(0.8 * n)
+idx.train <- sample(n, n.train)
+AD[which(AD[,1]==0),1] = rep("Normal",length(which(AD[,1]==0)))
+AD[which(AD[,1]==1),1] = rep("Diseased",length(which(AD[,1]==1)))
+AD.train <- AD[idx.train,c(1:16)]
+AD.test <- AD[-idx.train,c(1:16)]
+trainX <- AD.train[,c(2:16)]
+trainy= AD.train[,1]
+
+## Setup for cross-validation:
+# 10-fold cross validation
+# do 5 repetitions of cv
+# Use AUC to pick the best model
+
+ctrl <- trainControl(method="repeatedcv",
+                     repeats=1,
+                     summaryFunction=twoClassSummary,
+                     classProbs=TRUE)
+
+# Use the expand.grid to specify the search space   
+grid <- expand.grid(sigma = c(0.002, 0.005, 0.01, 0.012, 0.015),
+C = c(0.3,0.4,0.5,0.6)
+)
+
+# method: Radial kernel 
+# tuneLength: 9 values of the cost function
+# preProc: Center and scale data
+svm.tune <- train(x = trainX, y = trainy, 
+                  method = "svmRadial", tuneLength = 9,
+                  preProc = c("center","scale"), metric="ROC",
+                  tuneGrid = grid,
+                  trControl=ctrl)
+
+svm.tune
+```
+
+
+```{r eval=FALSE, tidy = FALSE}
+theme_set(theme_gray(base_size = 15))
+
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+data <- read.csv(text=getURL(url))
+
+rm_indx <- which(colnames(data) %in% c("ID", "TOTAL13",
+                                       "MMSCORE"))
+data <- data[, -rm_indx]
+data$DX_bl <- as.factor(data$DX_bl)
+
+set.seed(1)
+
+err.mat <- NULL
+for (K in c(0.2, 0.3, 0.4, 0.5, 0.6, 0.7)) {
+
+testing.indices <- NULL
+for (i in 1:50) {
+testing.indices <- rbind(testing.indices, sample(nrow(data),
+                         floor((1 - K) * nrow(data))))
+}
+
+for (i in 1:nrow(testing.indices)) {
+
+  testing.ix <- testing.indices[i, ]
+  target.testing <- data$DX_bl[testing.ix]
+  
+  tree <- rpart(DX_bl ~ ., data[-testing.ix, ])
+  pred <- predict(tree, data[testing.ix, ], type = "class")
+  error <- length(which(as.character(pred) !=
+                  target.testing))/length(target.testing)
+  err.mat <- rbind(err.mat, c("tree", K, error))
+  
+  rf <- randomForest(DX_bl ~ ., data[-testing.ix, ])
+  pred <- predict(rf, data[testing.ix, ])
+  error <- length(which(as.character(pred) != 
+                  target.testing))/length(target.testing)
+  err.mat <- rbind(err.mat, c("RF", K, error))
+  
+  data1 <- data
+  data1$DX_bl <- as.numeric(as.character(data1$DX_bl))
+  boost <- gbm(DX_bl ~ ., data = data1[-testing.ix, ],
+               dist = "adaboost",interaction.depth = 6,
+               n.tree = 2000)  #cv.folds = 5, 
+  # best.iter <- gbm.perf(boost,method='cv')
+  pred <- predict(boost, data1[testing.ix, ], n.tree = 2000,
+                  type = "response")  # best.iter n.tree = 400, 
+  pred[pred > 0.5] <- 1
+  pred[pred <= 0.5] <- 0
+  error <- length(which(as.character(pred) !=
+                        target.testing))/length(target.testing)
+  err.mat <- rbind(err.mat, c("AdaBoost", K, error))
+  }
+}
+err.mat <- as.data.frame(err.mat)
+colnames(err.mat) <- c("method", "training_percent", "error")
+err.mat <- err.mat %>% mutate(training_percent =
+    as.numeric(as.character(training_percent)), error =
+    as.numeric(as.character(error)))
+
+ggplot() + geom_boxplot(data = err.mat %>%
+       mutate(training_percent = as.factor(training_percent)), 
+         aes(y = error, x = training_percent,
+             color = method)) + geom_point(size = 3)
+```
+
+
+```{r eval=FALSE, tidy = FALSE}
+err.mat <- NULL
+set.seed(1)
+for (i in 1:nrow(testing.indices)) {
+  data1 <- data
+  data1$DX_bl <- as.numeric(as.character(data1$DX_bl))
+  ntree.v <- c(200, 300, 400, 500, 600, 800, 1000, 1200,
+               1400, 1600, 1800, 2000)
+  for (j in ntree.v) {
+    boost <- gbm(DX_bl ~ ., data = data1[-testing.ix, ],
+                 dist = "adaboost", interaction.depth = 6,
+                 n.tree = j)
+    # best.iter <- gbm.perf(boost,method='cv')
+    pred <- predict(boost, data1[testing.ix, ], n.tree = j,
+                    type = "response")
+    pred[pred > 0.5] <- 1
+    pred[pred <= 0.5] <- 0
+    error <- length(which(as.character(pred) !=
+                    target.testing))/length(target.testing)
+    err.mat <- rbind(err.mat, c("AdaBoost", j, error))
+    }
+}
+err.mat <- as.data.frame(err.mat)
+colnames(err.mat) <- c("method", "num_trees", "error")
+err.mat <- err.mat %>%
+  mutate(num_trees = as.numeric(as.character(num_trees)), 
+         error = as.numeric(as.character(error)))
+
+ggplot() + geom_boxplot(data = err.mat %>% 
+          mutate(num_trees = as.factor(num_trees)), 
+          aes(y = error, x = num_trees, color = method)) +
+              geom_point(size = 3)
+```
+
+
+```{r eval=FALSE, tidy = FALSE}
+err.mat <- NULL
+set.seed(1)
+for (i in 1:nrow(testing.indices)) {
+testing.ix <- testing.indices[i, ]
+target.testing <- data$DX_bl[testing.ix]
+
+ntree.v <- c(5, 10, 50, 100, 200, 400, 600, 800, 1000)
+for (j in ntree.v) {
+rf <- randomForest(DX_bl ~ ., data[-testing.ix, ], ntree = j)
+pred <- predict(rf, data[testing.ix, ])
+error <- length(which(as.character(pred) !=
+                        target.testing))/length(target.testing)
+err.mat <- rbind(err.mat, c("RF", j, error))
+}
+}
+err.mat <- as.data.frame(err.mat)
+colnames(err.mat) <- c("method", "num_trees", "error")
+err.mat <- err.mat %>% mutate(num_trees =
+                          as.numeric(as.character(num_trees)), 
+error = as.numeric(as.character(error)))
+
+ggplot() + geom_boxplot(data = 
+            err.mat %>% mutate(num_trees = as.factor(num_trees)), 
+              aes(y = error, x = num_trees, color = method)) + 
+            geom_point(size = 3)
+
+```
+
+
+```{r eval=FALSE, tidy = FALSE}
+err.mat <- NULL
+set.seed(1)
+for (i in 1:nrow(testing.indices)) {
+  testing.ix <- testing.indices[i, ]
+  target.testing <- data$DX_bl[testing.ix]
+  
+  sample.size.v <- seq(0.1, 1, by = 0.1)
+  for (j in sample.size.v) {
+    sample.size <- floor(nrow(data[-testing.ix, ]) * j)
+    rf <- randomForest(DX_bl ~ ., data[-testing.ix, ],
+                       sampsize = sample.size, 
+                       replace = FALSE)
+    pred <- predict(rf, data[testing.ix, ])
+    error <- length(which(as.character(pred) !=
+                target.testing))/length(target.testing)
+    err.mat <- rbind(err.mat, c("RF", j, error))
+    }
+}
+err.mat <- as.data.frame(err.mat)
+colnames(err.mat) <- c("method", "sample_size", "error")
+err.mat <- err.mat %>% mutate(sample_size =
+                as.numeric(as.character(sample_size)), 
+                error = as.numeric(as.character(error)))
+ggplot() + geom_boxplot(data = err.mat %>% 
+              mutate(sample_size = as.factor(sample_size)), 
+              aes(y = error, x = sample_size,
+                  color = method)) + 
+           geom_point(size = 3)
+```
+
+
+```{r eval=FALSE, tidy = FALSE}
+err.mat <- NULL
+set.seed(1)
+for (i in 1:nrow(testing.indices)) {
+  testing.ix <- testing.indices[i, ]
+  target.testing <- data$DX_bl[testing.ix]
+  
+  num.fea.v <- 1:(ncol(data) - 1)
+  for (j in num.fea.v) {
+    sample.size <- nrow(data[-testing.ix, ])
+    rf <- randomForest(DX_bl ~ ., data[-testing.ix, ],
+                       mtry = j, sampsize = sample.size, 
+                       replace = FALSE)
+    pred <- predict(rf, data[testing.ix, ])
+    error <- length(which(as.character(pred) !=
+                  target.testing))/length(target.testing)
+    err.mat <- rbind(err.mat, c("RF", j, error))
+  }
+}
+err.mat <- as.data.frame(err.mat)
+colnames(err.mat) <- c("method", "num_fea", "error")
+err.mat <- err.mat %>% mutate(num_fea
+                    = as.numeric(as.character(num_fea)),
+                    error = as.numeric(as.character(error)))
+
+ggplot() + geom_boxplot(data =
+             err.mat %>% mutate(num_fea = as.factor(num_fea)), 
+             aes(y = error, x = num_fea, color = method)) +
+           geom_point(size = 3)
+```
+

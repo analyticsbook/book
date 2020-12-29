@@ -1,0 +1,142 @@
+
+\chapter{Chapter 6: Diagnosis \newline \textit{Residuals \& Heterogeneity}}
+
+
+```{r eval=TRUE}
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+AD$ID = c(1:dim(AD)[1])
+str(AD)
+# fit a full-scale model
+AD_full <- AD[,c(2:17)]
+lm.AD <- lm(MMSCORE ~ ., data = AD_full)
+summary(lm.AD)
+# Automatic model selection
+lm.AD.F <- step(lm.AD, direction="backward", test="F")
+```
+
+
+```{r eval=TRUE}
+# Conduct diagnostics of the model
+# install.packages("ggfortify")
+library("ggfortify")
+autoplot(lm.AD.F, which = 1:6, ncol = 3, label.size = 3)
+```
+
+
+```{r eval=TRUE}
+# For comparison, let's simulate data 
+# from a model that fits the assumptions
+x1 <- rnorm(100, 0, 1)
+x2 <- rnorm(100, 0, 1)
+beta1 <- 1
+beta2 <- 1
+mu <- beta1 * x1 + beta2 * x2
+y <- rnorm(100, mu, 1)
+```
+
+
+```{r eval=TRUE}
+lm.XY <- lm(y ~ ., data = data.frame(y,x1,x2))
+summary(lm.XY)
+```
+
+
+```{r eval=TRUE}
+autoplot(lm.XY, which = 1:6, ncol = 2, label.size = 3)
+```
+
+
+```{r eval=TRUE}
+# Conduct diagnostics of the model
+library("ggfortify")
+autoplot(lm.XY, which = 1:6, ncol = 3, label.size = 3)
+```
+
+
+```{r eval=TRUE}
+# Extract the covariance matrix of the regression parameters
+Sigma = vcov(lm.AD.F)
+# Visualize the correlation matrix of the estimated regression 
+# parameters
+# install.packages("corrplot")
+library(corrplot)
+corrplot(cov2cor(Sigma), method="ellipse")
+```
+
+
+```{r eval=TRUE}
+require(randomForest)
+require(plotmo)
+library(RCurl)
+set.seed(1)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD_hd.csv")
+data <- read.csv(text=getURL(url))
+
+target <- data$AGE
+rm_indx <- which(colnames(data) %in% 
+                   c("AGE", "ID", "TOTAL13", "MMSCORE","DX_bl"))
+X <- data[, -rm_indx]
+rf.mod <- randomForest(X, target)
+plotres(rf.mod, which = 3)
+```
+
+
+```{r eval=TRUE}
+plotres(rf.mod, which = 4)
+```
+
+
+```{r eval=TRUE}
+# Simulate a clustering structure
+X <- c(rnorm(200, 0, 1), rnorm(200, 10,2), 
+       rnorm(200,20,1), rnorm(200,40, 2))
+Y <- c(rnorm(800, 0, 1))
+plot(X,Y, ylim = c(-5, 5), pch = 19, col = "gray25")
+```
+
+
+```{r eval=TRUE}
+# use GMM to identify the clusters
+require(mclust)
+XY.clust <- Mclust(data.frame(X,Y))
+summary(XY.clust)
+plot(XY.clust)
+```
+
+
+```{r eval=TRUE,tidy=FALSE}
+# install.packages("mclust")
+require(mclust)
+AD.Mclust <- Mclust(AD[,c(3,4,5,6,10,12,14,15)])
+summary(AD.Mclust)
+AD.Mclust$data = AD.Mclust$data[,c(1:4)]
+```
+
+
+```{r eval=TRUE}
+rm(list = ls(all = TRUE))
+library(rpart)
+library(dplyr)
+library(ggplot2)
+library(randomForest)
+library(MASS)
+library(cluster)
+ndata <- 2000
+
+sigma <- matrix(c(1, 0, 0, 1), 2, 2)
+data1 <- mvrnorm(n = 500, rep(0, 2), sigma)
+data2 <- mvrnorm(n = 500, rep(3, 2), sigma)
+data <- rbind(data1, data2)
+rf <- randomForest(data)
+prox <- rf$proximity
+clusters <- pam(prox, 2)
+data <- as.data.frame(data)
+data$cluster <- as.character(clusters$clustering)
+ggplot(data, aes(x = V1, y = V2, color = cluster)) 
++ geom_point() + labs(title = 'Data points')
+```
+

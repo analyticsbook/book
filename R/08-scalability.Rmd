@@ -1,0 +1,269 @@
+
+\chapter{Chapter 8: Scalability \newline \textit{LASSO \& PCA}}
+
+
+```{r eval=TRUE}
+# Step 1 -> Read data into R workstation
+#### Read data from a CSV file
+#### Example: Alzheimer's Disease
+# RCurl is the R package to read csv file using a link
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD_hd.csv")
+AD <- read.csv(text=getURL(url))
+str(AD)
+```
+
+
+```{r eval=TRUE}
+# Step 2 -> Data preprocessing
+# Create your X matrix (predictors) and Y 
+# vector (outcome variable)
+X <- AD[,-c(1:4)]
+Y <- AD$MMSCORE
+
+# Then, we integrate everything into a data frame
+data <- data.frame(Y,X)
+names(data)[1] = c("MMSCORE")
+
+# Create a training data
+train.ix <- sample(nrow(data),floor( nrow(data)) * 4 / 5 )
+data.train <- data[train.ix,]
+# Create a testing data
+data.test <- data[-train.ix,]
+
+# as.matrix is used here, because the package 
+# glmnet requires this data format.
+trainX <- as.matrix(data.train[,-1])
+testX <- as.matrix(data.test[,-1])
+trainY <- as.matrix(data.train[,1])
+testY <- as.matrix(data.test[,1])
+```
+
+
+```{r eval=TRUE}
+# Step 3 -> Use glmnet to conduct LASSO
+# install.packages("glmnet")
+require(glmnet)
+fit = glmnet(trainX,trainY, family=c("gaussian"))
+
+print(fit$beta) 
+# The fitted sparse regression parameters under 
+# different lambda values are stored in fit$beta.
+```
+
+
+```{r eval=TRUE}
+# Step 4 -> visualization of the path trajectory of 
+# the fitted sparse regression parameters
+plot(fit,label = TRUE)
+```
+
+
+```{r eval=TRUE}
+# Step 5 -> Use cross-validation to decide which lambda to use
+cv.fit = cv.glmnet(trainX,trainY)
+plot(cv.fit) 
+# look for the u-shape, and identify the lowest 
+# point that corresponds to the best model
+```
+
+
+```{r eval=TRUE}
+# Step 6 -> To view the best model and the 
+# corresponding coefficients
+cv.fit$lambda.min 
+# cv.fit$lambda.min is the best lambda value that results 
+# in the best model with smallest mean squared error (MSE)
+coef(cv.fit, s = "lambda.min") 
+# This extracts the fitted regression parameters of 
+# the linear regression model using the given lambda value.
+
+y_hat <- predict(cv.fit, newx = testX, s = "lambda.min") 
+# This is to predict using the best model
+cor(y_hat, data.test$MMSCORE)
+mse <- mean((y_hat - data.test$MMSCORE)^2) 
+# The mean squared error (mse)
+mse
+```
+
+
+```{r eval=TRUE}
+# Step 7 -> Re-fit the regression model with selected variables 
+# by LASSO
+var_idx <- which(coef(cv.fit, s = "lambda.min") != 0)
+lm.AD.reduced <- lm(MMSCORE ~ ., data = data.train[,var_idx])
+summary(lm.AD.reduced)
+```
+
+
+```{r eval=TRUE}
+x1 <- c(-10, -4, 2, 8, 14)
+x2 <- c(6, 2, 1, 0, -4)
+x <- cbind(x1,x2)
+x.scale <- scale(x) #standardize the data
+eigen.x <- eigen(cor(x))
+plot(x.scale, col = "gray", lwd = 2)
+abline(0,eigen.x$vectors[2,1]/eigen.x$vectors[1,1],
+       lwd = 3, col = "black")
+```
+
+
+```{r eval=TRUE}
+# Step 1 -> Read data into R
+#### Read data from a CSV file
+#### Example: Alzheimer's Disease
+
+# RCurl is the R package to read csv file using a link
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD_hd.csv")
+AD <- read.csv(text=getURL(url))
+# str(AD)
+```
+
+
+```{r eval=TRUE}
+# Step 2 -> Data preprocessing
+# Create your X matrix (predictors) and Y vector 
+# (outcome variable)
+X <- AD[,-c(1:16)]
+Y <- AD$MMSCORE
+
+# Then, we integrate everything into a data frame
+data <- data.frame(Y,X)
+names(data)[1] = c("MMSCORE")
+
+# Create a training data 
+train.ix <- sample(nrow(data),floor( nrow(data)) * 4 / 5 )
+data.train <- data[train.ix,]
+# Create a testing data 
+data.test <- data[-train.ix,]
+
+trainX <- as.matrix(data.train[,-1])
+testX <- as.matrix(data.test[,-1])
+trainY <- as.matrix(data.train[,1])
+testY <- as.matrix(data.test[,1])
+```
+
+
+```{r eval=TRUE}
+# Step 3 -> Implement principal component analysis
+# install.packages("factoextra")
+require(FactoMineR)
+# Conduct the PCA analysis
+pca.AD <- PCA(trainX,  graph = FALSE,ncp=10) 
+# names(pca.AD) will give you the list of variable names in the
+# object pca.AD created by PCA(). For instance, pca.AD$eig records
+# the eigenvalues of all the PCs, also the transformed value into 
+# cumulative percentage of variance. pca.AD$var stores the 
+# loadings of the variables in each of the PCs.
+```
+
+
+```{r eval=TRUE}
+# Step 4 -> Examine the contributions of the PCs in explaining 
+# the variation in data.
+require(factoextra ) 
+# to use the following functions such as get_pca_var() 
+# and fviz_contrib()
+fviz_screeplot(pca.AD, addlabels = TRUE, ylim = c(0, 50))
+```
+
+
+```{r eval=TRUE}
+# Step 5 -> Examine the loadings of the PCs.
+var <- get_pca_var(pca.AD) # to get the loadings of the PCs
+head(var$contrib) # to show the first 10 PCs
+
+# Visualize the contributions of top variables to 
+# PC1 using a bar plot
+fviz_contrib(pca.AD, choice = "var", axes = 1, top = 20)
+# Visualize the contributions of top variables to PC2 using 
+# a bar plot
+fviz_contrib(pca.AD, choice = "var", axes = 2, top = 20)
+```
+
+
+```{r eval=TRUE}
+# Step 6 -> use the transformed data fit a line regression model
+
+# Data pre-processing
+# Transformation of the X matrix of the training data
+trainX <- pca.AD$ind$coord 
+trainX <- data.frame(trainX)
+names(trainX) <- c("PC1","PC2","PC3","PC4","PC5","PC6","PC7",
+                   "PC8","PC9","PC10")
+# Transformation of the X matrix of the testing data
+testX <- predict(pca.AD , newdata = testX) 
+testX <- data.frame(testX$coord)
+names(testX) <- c("PC1","PC2","PC3","PC4","PC5","PC6",
+                  "PC7","PC8","PC9","PC10")
+
+tempData <- data.frame(trainY,trainX)
+names(tempData)[1] <- c("MMSCORE")
+lm.AD <- lm(MMSCORE ~ ., data = tempData)
+summary(lm.AD)
+
+y_hat <- predict(lm.AD, testX)
+cor(y_hat, testY)
+mse <- mean((y_hat - testY)^2) # The mean squared error (mse)
+mse
+```
+
+
+```{r eval=TRUE}
+# Projection of data points in the new space defined by 
+# the first two PCs
+fviz_pca_ind(pca.AD, label="none", habillage=AD[train.ix,]$DX_bl,
+             addEllipses=TRUE, ellipse.level=0.95)
+```
+
+
+```{r eval=TRUE}
+# PCA example
+x1 <- c(-1,3,3,-3,3,5,7,2)
+x2 <- c(0,3,5,-2,4,6,6,2)
+x3 <- c(1,1,1,1,1,1,1,0)
+X <- cbind(x1,x2,x3)
+require(FactoMineR)
+require(factoextra)
+t <- PCA(X)
+t$eig
+t$var$coord
+
+# Draw the screeplot
+fviz_screeplot(t, addlabels = TRUE)
+
+# Draw the variable loadings plot
+fviz_contrib(t, choice = "var", axes = 1, top = 20,
+             sort.val = "none") +
+            theme(text = element_text(size = 20))
+fviz_contrib(t, choice = "var", axes = 2, top = 20,
+             sort.val = "none") +
+            theme(text = element_text(size = 20))
+fviz_contrib(t, choice = "var", axes = 3, top = 20,
+             sort.val = "none") +
+            theme(text = element_text(size = 20))
+```
+
+
+```{r eval=TRUE}
+# Build a linear regression model
+x1 <- c(-1,3,3,-3,3,5,7,2)
+x2 <- c(0,3,5,-2,4,6,6,2)
+x3 <- c(1,1,1,1,1,1,1,0)
+X <- cbind(x1,x2,x3)
+y <- c(1.33,0.7,2.99,-1.78,0.07,4.62,3.87,0.58)
+data <- data.frame(cbind(y,X))
+lm.fit <- lm(y~., data = data)
+summary(lm.fit)
+```
+
+
+```{r eval=TRUE}
+# Build a linear regression model
+lm.fit <- lm(y~ x1 + x2, data = data)
+summary(lm.fit)
+```
+

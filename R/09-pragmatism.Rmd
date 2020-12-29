@@ -1,0 +1,335 @@
+
+\chapter{Chapter 9: Pragmatism \newline \textit{Experience \& Experimental}}
+
+
+```{r eval=TRUE}
+# Use R to visualize a kernel function
+require(latex2exp) # enable the use of latex in R graphics
+# write a function for the kernel function
+gauss <- function(x,gamma) exp(- gamma * x^2)
+x <- seq(from = -3, to = 3, by = 0.001) 
+plot(x, gauss(x,0.2), lwd = 1, xlab = TeX('$x_i  - x_j$'),
+     ylab="Gaussian radial basis kernel", col = "black")
+lines(x, gauss(x,0.5), lwd = 1, col = "forestgreen")
+lines(x, gauss(x,1), lwd = 1, col = "darkorange")
+legend(x = "topleft", 
+       legend = c(TeX('$\\gamma = 0.2$'), TeX('$\\gamma = 0.5$'),
+                  TeX('$\\gamma = 1$')), 
+       lwd = rep(4, 4), col = c("black",
+                                "darkorange","forestgreen"))
+```
+
+
+```{r eval=TRUE}
+# Step 1 -> Read data into R workstation
+
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/KR.csv")
+data <- read.csv(text=getURL(url))
+# str(data)
+
+# Step 2 -> Data preprocessing
+# Create X matrix (predictors) and Y vector (outcome variable)
+X <- data$x
+Y <- data$y
+
+# Create a training data 
+train.ix <- sample(nrow(data),floor( nrow(data) * 4/5) )
+data.train <- data[train.ix,]
+# Create a testing data 
+data.test <- data[-train.ix,]
+```
+
+
+```{r eval=TRUE}
+# Step 3 -> gather a list of candidate models
+
+# model1: ksmooth(x,y, kernel = "normal", bandwidth=10)
+# model2: ksmooth(x,y, kernel = "box", bandwidth=5)
+# model3: ...
+```
+
+
+```{r eval=TRUE}
+# Step 4 -> Use 5-fold cross-validation to evaluate the models
+
+n_folds = 10 # number of fold 
+N <- dim(data.train)[1] 
+folds_i <- sample(rep(1:n_folds, length.out = N)) 
+
+# evaluate model1
+cv_mse <- NULL 
+for (k in 1:n_folds) {
+  test_i <- which(folds_i == k) 
+  data.train.cv <- data.train[-test_i, ] 
+  data.test.cv <- data.train[test_i, ]  
+  require( 'kernlab' )
+  model1 <- ksmooth(data.train.cv$x, data.train.cv$y, 
+                    kernel = "normal", bandwidth = 10,
+                    x.points=data.test.cv[,1]) 
+  # (1) Fit the kernel regression model with Gaussian kernel
+  # (argument: kernel = "normal") and bandwidth = 0.5; (2) There is
+  # no predict() for ksmooth. Use the argument
+  # "x.points=data.test.cv" instead. 
+  y_hat <- model1$y  
+  true_y <- data.test.cv$y  
+  cv_mse[k] <- mean((true_y - y_hat)^2) 
+}
+
+mean(cv_mse)
+
+# evaluate model2 using the same script above
+# ... 
+```
+
+
+```{r eval=TRUE}
+# Step 5 -> After model selection, use ksmooth() function to 
+# build your final model
+kr.final <- ksmooth(data.train$x, data.train$y, kernel = "normal",
+                    bandwidth = 10, x.points=data.test[,1]) # 
+
+```
+
+
+```{r eval=TRUE}
+# Step 6 -> Evaluate the prediction performance of your model
+y_hat <- kr.final$y  
+true_y <- data.test$y   
+mse <- mean((true_y - y_hat)^2)    
+print(mse)
+```
+
+
+```{r eval=TRUE}
+# Simulate one batch of data
+n_train <- 100
+# coefficients of the true model
+coef <- c(-0.68,0.82,-0.417,0.32,-0.68) 
+v_noise <- 0.2
+n_df <- 20
+df <- 1:n_df
+tempData <- gen_data(n_train, coef, v_noise)
+```
+
+
+```{r eval=TRUE}
+# Plot the true model
+plot(y ~ x, col = "gray", lwd = 2)
+lines(x, X %*% coef, lwd = 3, col = "black")
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+lines(ksmooth(x,y, "normal", bandwidth=2),lwd = 3,
+      col = "darkorange")
+lines(ksmooth(x,y, "normal", bandwidth=5),lwd = 3,
+      col = "dodgerblue4")
+lines(ksmooth(x,y, "normal", bandwidth=15),lwd = 3,
+      col = "forestgreen")
+legend(x = "topright",
+       legend = c("True function", "Kernel Reg (bw = 2)",
+                  "Kernel Reg (bw = 5)", "Kernel Reg (bw = 15)"), 
+       lwd = rep(3, 4),
+       col = c("black","darkorange","dodgerblue4","forestgreen"), 
+       text.width = 32, cex = 0.85)
+```
+
+
+```{r eval=TRUE}
+# install.packages("FNN")
+require(FNN)
+## Loading required package: FNN
+xy.knn3<- knn.reg(train = x, y = y, k=3)
+xy.knn10<- knn.reg(train = x, y = y, k=10)
+xy.knn50<- knn.reg(train = x, y = y, k=50)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Plot the data
+plot(y ~ x, col = "gray", lwd = 2)
+lines(x, X %*% coef, lwd = 3, col = "black")
+lines(x, xy.knn3$pred, lwd = 3, col = "darkorange")
+lines(x, xy.knn10$pred, lwd = 3, col = "dodgerblue4")
+lines(x, xy.knn50$pred, lwd = 3, col = "forestgreen")
+legend(x = "topleft",
+       legend = c("True function", "KNN (k = 3)",
+                  "KNN (k = 10)", "KNN (k = 50)"), 
+        lwd = rep(3, 4),
+        col = c("black", "darkorange", "dodgerblue4",
+                "forestgreen"), 
+        text.width = 32, cex = 0.85)
+```
+
+
+```{r eval=TRUE}
+# Conditional variance function
+# Simulate a regression model with heterogeneous variance
+gen_data <- function(n, coef) {
+x <- rnorm(100,0,2)
+eps <- rnorm(100,0,sapply(x,function(x){0.5+0.8*x^2}))
+X <- cbind(1,x)
+y <- as.numeric(X %*% coef + eps)
+return(data.frame(x = x, y = y))
+}
+n_train <- 100
+coef <- c(1,0.5)
+tempData <- gen_data(n_train, coef)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Fit the data using linear regression model (OLS)
+x <- tempData[, "x"]
+y <- tempData[, "y"]
+fit.ols <- lm(y~x,data=tempData)
+# Plot the data and the models
+x <- tempData$x
+X <- cbind(1, x)
+y <- tempData$y
+plot(y ~ x, col = "gray", lwd = 2)
+# Plot the true model
+lines(x, X %*% coef, lwd = 3, col = "black")
+# Plot the linear regression model (OLS)
+lines(x, fitted(fit.ols), lwd = 3, col = "darkorange")
+legend(x = "topleft", legend = c("True function",
+                                 "Linear model (OLS)"), 
+lwd = rep(4, 4), col = c("black", "darkorange"),
+      text.width = 4, cex = 1)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Plot the residual estimated from the linear regression
+# model (OLS)
+plot(x,residuals(fit.ols)^2,ylab="squared residuals",
+     col = "gray", lwd = 2)
+# Plot the true model underlying the variance of the
+# error term
+curve((1+0.8*x^2)^2,col = "black", lwd = 3, add=TRUE)
+# Fit a nonlinear regression model for residuals
+# install.packages("np")
+require(np)
+var1 <- npreg(residuals(fit.ols)^2 ~ x)
+grid.x <- seq(from=min(x),to=max(x),length.out=300)
+lines(grid.x,predict(var1,exdat=grid.x), lwd = 3,
+      col = "darkorange")
+legend(x = "topleft",
+       legend = c("True function",
+                  "Fitted nonlinear model (1st iter)"), 
+       lwd = rep(4, 4), col = c("black", "darkorange"),
+       text.width = 5, cex = 1.2)
+```
+
+
+```{r eval=TRUE}
+# Fit a linear regression model (WLS) with the weights specified 
+# by the fitted nonlinear model of the residuals
+fit.wls <- lm(y~x,weights=1/fitted(var1))
+plot(y ~ x, col = "gray", lwd = 2,ylim = c(-20,20))
+# Plot the true model
+lines(x, X %*% coef, lwd = 3, col = "black")
+# Plot the linear regression model (OLS)
+lines(x, fitted(fit.ols), lwd = 3, col = "darkorange")
+# Plot the linear regression model (WLS) with estimated 
+# variance function
+lines(x, fitted(fit.wls), lwd = 3, col = "forestgreen")
+legend(x = "topleft", 
+       legend = c("True function", "Linear (OLS)", 
+                  "Linear (WLS) + estimated variance"), 
+       lwd = rep(4, 4), 
+       col = c("black", "darkorange","forestgreen"),
+       text.width = 5, cex = 1)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+
+str(AD)
+# Fit the data using linear regression model (OLS)
+x <- AD$HippoNV
+y <- AD$MMSCORE
+fit.ols <- lm(y~x,data=AD)
+# Fit a linear regression model (WLS) with the weights specified 
+# by the fitted nonlinear model of the residuals
+var1 <- npreg(residuals(fit.ols)^2 ~ HippoNV, data = AD)         
+fit.wls <- lm(y~x,weights=1/fitted(var1))
+plot(y ~ x, col = "gray", lwd = 2)
+# Plot the linear regression model (OLS)
+lines(x, fitted(fit.ols), lwd = 3, col = "darkorange")
+# Plot the linear regression model (WLS) with estimated variance
+# function
+lines(x, fitted(fit.wls), lwd = 3, col = "forestgreen")
+legend(x = "topleft",
+       legend = c("Linear (OLS)",
+                  "Linear (WLS) + estimated variance"), 
+       lwd = rep(4, 4), col = c("darkorange","forestgreen"),
+       text.width = 0.2, cex = 1)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Plot the residual estimated from the linear regression 
+# model (OLS)
+plot(x,residuals(fit.ols)^2,ylab="squared residuals",
+     col = "gray", lwd = 2)
+# Fit a nonlinear regression model for residuals
+# install.packages("np")
+require(np)
+var2 <- npreg(residuals(fit.wls)^2 ~ x)
+grid.x <- seq(from=min(x),to=max(x),length.out=300)
+lines(grid.x,predict(var1,exdat=grid.x), lwd = 3,
+      col = "darkorange")
+lines(grid.x,predict(var2,exdat=grid.x), lwd = 3,
+      col = "forestgreen")
+legend(x = "topleft",
+       legend = c("Fitted nonlinear model (1st iter)",
+                "Fitted nonlinear model (2nd iter)"), 
+                lwd = rep(4, 4),
+                col = c( "darkorange", "forestgreen"),
+                text.width = 0.25, cex = 1.2)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Write a nice simulator to generate dataset with one
+# predictor and one outcome from a polynomial regression
+# model
+require(splines)
+seed <- rnorm(1)
+set.seed(seed)
+gen_data <- function(n, coef, v_noise) {
+  eps <- rnorm(n, 0, v_noise)
+  x <- sort(runif(n, 0, 100))
+  X <- cbind(1,ns(x, df = (length(coef) - 1)))
+  y <- as.numeric(X %*% coef + eps)
+  return(data.frame(x = x, y = y))
+}
+n_train <- 30
+coef <- c(1,0.5)
+v_noise <- 3
+tempData <- gen_data(n_train, coef, v_noise)
+tempData[31,] = c(200,200)
+# Fit the data using linear regression model
+x <- tempData[, "x"]
+y <- tempData[, "y"]
+fit <- lm(y~x,data=tempData)
+# Plot the data
+x <- tempData$x
+X <- cbind(1, x)
+y <- tempData$y
+plot(y ~ x, col = "gray", lwd = 2)
+lines(x, X %*% coef, lwd = 3, col = "black")
+lines(x, fitted(fit), lwd = 3, col = "darkorange")
+legend(x = "topleft", legend = c("True function",
+       "Fitted linear model"), lwd = rep(4, 4),
+       col = c("black", "darkorange"),
+       text.width = 100, cex = 1.5)
+```
+

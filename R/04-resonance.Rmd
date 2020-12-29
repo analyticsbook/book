@@ -1,0 +1,612 @@
+
+\chapter{Chapter 4: Resonance \newline \textit{Bootstrap  \& Random Forests}}
+
+
+```{r eval=TRUE}
+# Step 1 -> Read data into R workstation
+# RCurl is the R package to read csv file using a link
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+# str(AD)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Step 2 -> Decide on the statistical operation 
+# that you want to "Bootstrap" with
+require(MASS)
+fit <- fitdistr(AD$HippoNV, densfun="normal")  
+# fitdistr() is a function from the package "MASS". 
+# It can fit a range of distributions, e.g., by using the argument, 
+# densfun="normal", we fit a normal distribution.
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+fit
+##       mean           sd     
+##   0.471662891   0.076455789 
+##  (0.003362522) (0.002377662)
+lower.bound = fit$estimate[1] - 1.96 * fit$sd[2]
+upper.bound = fit$estimate[1] + 1.96 * fit$sd[2]
+##   lower.bound   upper.bound     
+##    0.4670027     0.4763231 
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Step 3 -> draw R bootstrap replicates to 
+# conduct the selected statistical operation
+R <- 1000
+# Initialize the vector to store the bootstrapped estimates
+bs_mean <- rep(NA, R)
+# draw R bootstrap resamples and obtain the estimates
+for (i in 1:R) {
+  resam1 <- sample(AD$HippoNV, length(AD$HippoNV), 
+                   replace = TRUE) 
+  # resam1 is a bootstrapped dataset. 
+  fit <- fitdistr(resam1 , densfun="normal")  
+  # store the bootstrapped estimates of the mean
+  bs_mean[i] <- fit$estimate[1] 
+}
+```
+
+
+```{r eval=TRUE,tidy=FALSE}
+# Step 4 -> Summarize the results and derive the
+# bootstrap confidence interval (CI) of the parameter
+# sort the mean estimates to obtain quantiles needed
+# to construct the CIs
+bs_mean.sorted <- sort(bs_mean) 
+# 0.025th and 0.975th quantile gives equal-tail bootstrap CI
+CI.bs <- c(bs_mean.sorted[round(0.025*R)],
+                        bs_mean.sorted[round(0.975*R+1)])
+CI.bs
+##   lower.bound   upper.bound     
+##    0.4656406     0.4778276 
+```
+
+
+```{r eval=TRUE}
+tempData <- data.frame(AD$HippoNV,AD$DX_bl)
+names(tempData) = c("HippoNV","DX_bl")
+tempData$DX_bl[which(tempData$DX_bl==0)] <- c("Normal")
+tempData$DX_bl[which(tempData$DX_bl==1)] <- c("Diseased")
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+require(ggplot2)
+p <- ggplot(tempData,aes(x = HippoNV, colour=DX_bl))
+p <- p +  geom_histogram(aes(y = ..count.., fill=DX_bl),
+                  alpha=0.5,position="identity") 
+print(p)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# draw R bootstrap replicates
+R <- 10000
+# init location for bootstrap samples
+bs0_mean <- rep(NA, R)
+bs1_mean <- rep(NA, R)
+# draw R bootstrap resamples and obtain the estimates
+for (i in 1:R) {
+resam0 <- sample(tempData$HippoNV[which(tempData$DX_bl==
+  "Normal")],length(tempData$HippoNV[which(tempData$DX_bl==
+                             "Normal")]),replace = TRUE)
+fit0 <- fitdistr(resam0 , densfun="normal")  
+bs0_mean[i] <- fit0$estimate[1]
+resam1 <- sample(tempData$HippoNV[which(tempData$DX_bl==
+             "Diseased")],
+         length(tempData$HippoNV[which(tempData$DX_bl==
+             "Diseased")]),replace = TRUE)
+fit1 <- fitdistr(resam1 , densfun="normal") 
+bs1_mean[i] <- fit1$estimate[1]
+}
+
+bs_meanDiff <- bs0_mean - bs1_mean
+
+# sort the mean estimates to obtain bootstrap CI
+bs_meanDiff.sorted <- sort(bs_meanDiff)
+# 0.025th and 0.975th quantile gives equal-tail bootstrap CI
+CI.bs <- c(bs_meanDiff.sorted[round(0.025*R)],
+           bs_meanDiff.sorted[round(0.975*R+1)])
+CI.bs
+```
+
+
+```{r eval=TRUE}
+CI.bs
+## [1] 0.08066058 0.10230428
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+## Plot the bootstrap distribution with CI
+# First put data in data.frame for ggplot()
+dat.bs_meanDiff <- data.frame(bs_meanDiff)
+
+library(ggplot2)
+p <- ggplot(dat.bs_meanDiff, aes(x = bs_meanDiff))
+p <- p + geom_histogram(aes(y=..density..))
+p <- p + geom_density(alpha=0.1, fill="white")
+p <- p + geom_rug()
+# vertical line at CI
+p <- p + geom_vline(xintercept=CI.bs[1], colour="blue",
+                    linetype="longdash")
+p <- p + geom_vline(xintercept=CI.bs[2], colour="blue",
+                    linetype="longdash")
+title = "Bootstrap distribution of the estimated mean
+         difference of HippoNV between normal and diseased"
+p <- p + labs(title =title)
+print(p)
+```
+
+
+```{r eval=TRUE}
+# Fit a regression model first, for comparison
+tempData <- data.frame(AD$MMSCORE,AD$AGE, AD$PTGENDER, AD$PTEDUCAT)
+names(tempData) <- c("MMSCORE","AGE","PTGENDER","PTEDUCAT")
+lm.AD <- lm(MMSCORE ~  AGE + PTGENDER + PTEDUCAT, data = tempData)
+sum.lm.AD <- summary(lm.AD)
+# Age is not significant according to the p-value
+std.lm <- sum.lm.AD$coefficients[ , 2]
+lm.AD$coefficients[2] - 1.96 * std.lm[2]
+lm.AD$coefficients[2] + 1.96 * std.lm[2]
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# draw R bootstrap replicates
+R <- 10000
+# init location for bootstrap samples
+bs_lm.AD_demo <- matrix(NA, nrow = R, ncol = 
+                          length(lm.AD$coefficients))
+# draw R bootstrap resamples and obtain the estimates
+for (i in 1:R) {
+  resam_ID <- sample(c(1:dim(tempData)[1]), dim(tempData)[1],
+                     replace = TRUE)
+  resam_Data <- tempData[resam_ID,]
+  bs.lm.AD_demo <- lm(MMSCORE ~  AGE + PTGENDER + PTEDUCAT,
+                      data = resam_Data)
+bs_lm.AD_demo[i,] <- bs.lm.AD_demo$coefficients
+}
+```
+
+
+```{r eval=TRUE, tidy =FALSE}
+bs.AGE <- bs_lm.AD_demo[,2]
+# sort the mean estimates of AGE to obtain bootstrap CI
+bs.AGE.sorted <- sort(bs.AGE)
+
+# 0.025th and 0.975th quantile gives equal-tail
+# bootstrap CI
+CI.bs <- c(bs.AGE.sorted[round(0.025*R)],
+       bs.AGE.sorted[round(0.975*R+1)])
+CI.bs
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+CI.bs
+##     Lower bound   Upper bound
+## [1] -0.053940482  0.005090523
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+## Plot the bootstrap distribution with CI
+# First put data in data.frame for ggplot()
+dat.bs.AGE <- data.frame(bs.AGE.sorted)
+
+library(ggplot2)
+p <- ggplot(dat.bs.AGE, aes(x = bs.AGE))
+p <- p + geom_histogram(aes(y=..density..))
+p <- p + geom_density(alpha=0.1, fill="white")
+p <- p + geom_rug()
+# vertical line at CI
+p <- p + geom_vline(xintercept=CI.bs[1], colour="blue",
+                    linetype="longdash")
+p <- p + geom_vline(xintercept=CI.bs[2], colour="blue",
+                    linetype="longdash")
+title <- "Bootstrap distribution of the estimated 
+                          regression parameter of AGE"
+p <- p + labs(title = title)
+print(p)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+bs.PTEDUCAT <- bs_lm.AD_demo[,4]
+# sort the mean estimates of PTEDUCAT to obtain
+# bootstrap CI
+bs.PTEDUCAT.sorted <- sort(bs.PTEDUCAT)
+
+# 0.025th and 0.975th quantile gives equal-tail
+# bootstrap CI
+CI.bs <- c(bs.PTEDUCAT.sorted[round(0.025*R)],
+           bs.PTEDUCAT.sorted[round(0.975*R+1)])
+CI.bs
+CI.bs
+## [1] 0.1021189 0.2429209
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+## Plot the bootstrap distribution with CI
+# First put data in data.frame for ggplot()
+dat.bs.PTEDUCAT <- data.frame(bs.PTEDUCAT.sorted)
+
+library(ggplot2)
+p <- ggplot(dat.bs.PTEDUCAT, aes(x = bs.PTEDUCAT))
+p <- p + geom_histogram(aes(y=..density..))
+p <- p + geom_density(alpha=0.1, fill="white")
+p <- p + geom_rug()
+# vertical line at CI
+p <- p + geom_vline(xintercept=CI.bs[1], colour="blue",
+                    linetype="longdash")
+p <- p + geom_vline(xintercept=CI.bs[2], colour="blue",
+                    linetype="longdash")
+title <- "Bootstrap distribution of the estimated regression
+                                      parameter of PTEDUCAT"
+p <- p + labs(title = title )
+print(p)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# This is a script for simulation study
+rm(list = ls(all = TRUE))
+require(rpart)
+require(dplyr)
+require(ggplot2)
+require(randomForest)
+ndata <- 2000
+X1 <- runif(ndata, min = 0, max = 1)
+X2 <- runif(ndata, min = 0, max = 1)
+data <- data.frame(X1, X2)
+data <- data %>% mutate(X12 = 0.5 * (X1 - X2),
+                        Y = ifelse(X12 >= 0, 1, 0))
+data <- data %>% dplyr::select(-c(X12)) %>% mutate(Y =
+                           as.factor(as.character(Y)))
+ggplot(data, aes(x = X1, y = X2, color = Y)) + geom_point() +
+                      labs(title = "Data points")
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+rf_model <- randomForest(Y ~ ., data = data)
+tree_model <- rpart(Y ~ ., data = data)
+
+pred_rf <- predict(rf_model, data, type = "prob")[, 1]
+pred_tree <- predict(tree_model, data, type = "prob")[, 1]
+data_pred <- data %>% mutate(pred_rf_class = ifelse(pred_rf <
+  0.5, 0, 1)) %>% mutate(pred_rf_class =
+  as.factor(as.character(pred_rf_class))) %>%
+  mutate(pred_tree_class = ifelse(pred_tree < 
+  0.5, 0, 1)) %>% mutate(pred_tree_class =
+                     as.factor(as.character(pred_tree_class)))
+ggplot(data_pred, aes(x = X1, y = X2, 
+                      color = pred_tree_class)) +
+  geom_point() + labs(title = "Classification boundary from
+                      a single decision tree") 
+ggplot(data_pred, aes(x = X1, y = X2, 
+                      color = pred_rf_class)) +
+  geom_point() + labs(title = "Classification bounday from
+                      random forests")
+```
+
+
+```{r eval=TRUE}
+# Step 1 -> Read data into R workstation
+# RCurl is the R package to read csv file using a link
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+
+# Step 2 -> Data preprocessing
+# Create your X matrix (predictors) and Y vector 
+# (outcome variable)
+X <- AD[,2:16]
+Y <- AD$DX_bl
+
+Y <- paste0("c", Y) 
+Y <- as.factor(Y)  
+
+# Then, we integrate everything into a data frame
+data <- data.frame(X,Y)
+names(data)[16] = c("DX_bl")
+
+# Create a training data (half the original data size)
+train.ix <- sample(nrow(data),floor( nrow(data)/2) )
+data.train <- data[train.ix,]
+# Create a testing data (half the original data size)
+data.test <- data[-train.ix,]
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Step 3 -> Use randomForest() function to build a 
+# RF model 
+# with all predictors
+library(randomForest)
+rf.AD <- randomForest( DX_bl ~ ., data = data.train, 
+                    ntree = 100, nodesize = 20, mtry = 5) 
+# Three main arguments to control the complexity 
+# of a random forest model
+```
+
+
+```{r eval=TRUE}
+# Step 4 -> Predict using your RF model
+y_hat <- predict(rf.AD, data.test,type="class")
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Step 5 -> Evaluate the prediction performance of your RF model
+# Three main metrics for classification: Accuracy, 
+# Sensitivity (1- False Positive), Specificity (1 - False Negative)
+library(caret) 
+confusionMatrix(y_hat, data.test$DX_bl)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# ROC curve is another commonly reported metric 
+# for classification models
+library(pROC) 
+# pROC has the roc() function that is very useful here
+y_hat <- predict(rf.AD, data.test,type="vote") 
+# In order to draw ROC, we need the intermediate prediction 
+# (before RF model binarize it into binary classification). 
+# Thus, by specifying the argument type="vote", we can 
+# generate this intermediate prediction. y_hat now has 
+# two columns, one corresponds to the ratio of votes the 
+# trees assign to one class, and the other column is the 
+# ratio of votes the trees assign to another class.
+main = "ROC Curve"
+plot(roc(data.test$DX_bl, y_hat[,1]),
+     col="blue", main=main)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(rpart)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+require(randomForest)
+library(RCurl)
+set.seed(1)
+
+theme_set(theme_gray(base_size = 15))
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+data <- read.csv(text=getURL(url))
+
+target_indx <- which(colnames(data) == "DX_bl")
+data[, target_indx] <- 
+  as.factor(paste0("c", data[, target_indx]))
+rm_indx <- which(colnames(data) %in% c("ID", "TOTAL13",
+                                       "MMSCORE"))
+data <- data[, -rm_indx]
+
+results <- NULL
+for (itree in c(1:9, 10, 20, 50, 100, 200, 300, 400, 500,
+    600, 700)) {
+for (i in 1:100) {
+train.ix <- sample(nrow(data), floor(nrow(data)/2))
+rf <- randomForest(DX_bl ~ ., ntree = itree, data =
+                                        data[train.ix, ])
+pred.test <- predict(rf, data[-train.ix, ], type = "class")
+this.err <- length(which(pred.test !=
+                data[-train.ix, ]$DX_bl))/length(pred.test)
+results <- rbind(results, c(itree, this.err))
+# err.rf <- c(err.rf, length(which(pred.test !=
+# data[-train.ix,]$DX_bl))/length(pred.test) )
+}
+}
+
+colnames(results) <- c("num_trees", "error")
+results <- as.data.frame(results) %>%
+  mutate(num_trees = as.character(num_trees))
+levels(results$num_trees) <- unique(results$num_trees)
+results$num_trees <- factor(results$num_trees,
+                            unique(results$num_trees))
+ggplot() + geom_boxplot(data = results, aes(y = error,
+                x = num_trees)) + geom_point(size = 3)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(rpart)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+require(randomForest)
+library(RCurl)
+set.seed(1)
+theme_set(theme_gray(base_size = 15))
+
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+data <- read.csv(text=getURL(url))
+
+target_indx <- which(colnames(data) == "DX_bl")
+data[, target_indx] <- as.factor(
+        paste0("c", data[, target_indx]))
+rm_indx <- which(colnames(data) %in% c("ID", "TOTAL13",
+                                       "MMSCORE"))
+data <- data[, -rm_indx]
+nFea <- ncol(data) - 1
+results <- NULL
+for (iFeatures in 1:nFea) {
+for (i in 1:20) {
+train.ix <- sample(nrow(data), floor(nrow(data)/2))
+rf <- randomForest(DX_bl ~ ., mtry = iFeatures, ntree = 100,
+                   data = data[train.ix,])
+pred.test <- predict(rf, data[-train.ix, ], type = "class")
+this.err <- length(which(pred.test !=
+                 data[-train.ix, ]$DX_bl))/length(pred.test)
+results <- rbind(results, c(iFeatures, this.err))
+# err.rf <- c(err.rf, length(which(pred.test !=
+# data[-train.ix,]$DX_bl))/length(pred.test) )
+}
+}
+colnames(results) <- c("num_features", "error")
+results <- as.data.frame(results) %>%
+  mutate(num_features = as.character(num_features))
+levels(results$num_features) <- unique(results$num_features)
+results$num_features <- factor(results$num_features,
+                              unique(results$num_features))
+ggplot() + geom_boxplot(data = results, aes(y = error,
+                  x = num_features)) + geom_point(size = 3)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+require(randomForest)
+library(RCurl)
+set.seed(1)
+
+theme_set(theme_gray(base_size = 15))
+
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+
+data <- read.csv(text=getURL(url))
+
+target_indx <- which(colnames(data) == "DX_bl")
+data[, target_indx] <- as.factor(paste0("c", data[, target_indx]))
+rm_indx <- which(colnames(data) %in% c("ID", "TOTAL13",
+                                       "MMSCORE"))
+data <- data[, -rm_indx]
+
+results <- NULL
+for (inodesize in c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30,
+    40, 50, 60, 70, 80,90, 100)) {
+  for (i in 1:20) {
+    train.ix <- sample(nrow(data), floor(nrow(data)/2))
+    rf <- randomForest(DX_bl ~ ., ntree = 100, nodesize =
+                     inodesize, data = data[train.ix,])
+    pred.test <- predict(rf, data[-train.ix, ], type = "class")
+    this.err <- length(which(pred.test !=
+                    data[-train.ix, ]$DX_bl))/length(pred.test)
+    results <- rbind(results, c(inodesize, this.err))
+    # err.rf <- c(err.rf, length(which(pred.test !=
+    # data[-train.ix,]$DX_bl))/length(pred.test) )
+  }
+}
+
+colnames(results) <- c("min_node_size", "error")
+results <- as.data.frame(results) %>%
+  mutate(min_node_size = as.character(min_node_size))
+levels(results$min_node_size) <- unique(results$min_node_size)
+results$min_node_size <- factor(results$min_node_size,
+                                unique(results$min_node_size))
+ggplot() + geom_boxplot(data = results, aes(y = error,
+                  x = min_node_size)) + geom_point(size = 3)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(rpart)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(RCurl)
+require(randomForest)
+set.seed(1)
+
+theme_set(theme_gray(base_size = 15))
+
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+data <- read.csv(text=getURL(url))
+
+target_indx <- which(colnames(data) == "DX_bl")
+data[, target_indx] <- as.factor(paste0("c", data[, target_indx]))
+rm_indx <- which(colnames(data) %in% 
+                   c("ID", "TOTAL13", "MMSCORE"))
+data <- data[, -rm_indx]
+
+err.tree <- NULL
+err.rf <- NULL
+for (i in 1:100) {
+train.ix <- sample(nrow(data), floor(nrow(data)/2))
+tree <- rpart(DX_bl ~ ., data = data[train.ix, ])
+pred.test <- predict(tree, data[-train.ix, ], type = "class")
+err.tree <- c(err.tree, length(
+  which(pred.test != data[-train.ix, ]$DX_bl))/length(pred.test))
+
+rf <- randomForest(DX_bl ~ ., data = data[train.ix, ])
+pred.test <- predict(rf, data[-train.ix, ], type = "class")
+err.rf <- c(err.rf, length(
+  which(pred.test != data[-train.ix, ]$DX_bl))/length(pred.test))
+}
+err.tree <- data.frame(err = err.tree, method = "tree")
+err.rf <- data.frame(err = err.rf, method = "random_forests")
+
+ggplot() + geom_boxplot(
+  data = rbind(err.tree, err.rf), aes(y = err, x = method)) + 
+geom_point(size = 3)
+```
+
+
+```{r eval=TRUE}
+entropy <- function(p_v) {
+e <- 0
+for (p in p_v) {
+if (p == 0) {
+this_term <- 0
+} else {
+this_term <- -p * log2(p)
+}
+e <- e + this_term
+}
+return(e)
+}
+```
+
+
+```{r eval=TRUE}
+gini <- function(p_v) {
+e <- 0
+for (p in p_v) {
+if (p == 0) {
+this.term <- 0
+} else {
+this.term <- p * (1 - p)
+}
+e <- e + this.term
+}
+return(e)
+}
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+entropy.v <- NULL
+gini.v <- NULL
+p.v <- seq(0, 1, by = 0.01)
+for (p in p.v) {
+entropy.v <- c(entropy.v, (entropy(c(p, 1 - p))))
+gini.v <- c(gini.v, (gini(c(p, 1 - p))))
+}
+plot(p.v, gini.v, type = "l", ylim = c(0, 1),
+    xlab = "percentage of class 1",col = "red",
+    ylab = "impurity measure", cex.lab = 1.5,
+    cex.axis = 1.5, cex.main = 1.5,cex.sub = 1.5)
+lines(p.v, entropy.v, col = "blue")
+legend("topleft", legend = c("Entropy", "Gini index"),
+       col = c("blue", "red"), lty = c(1, 1), cex = 0.8)
+```
+

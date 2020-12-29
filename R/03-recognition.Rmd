@@ -1,0 +1,561 @@
+
+\chapter{Chapter 3: Recognition \newline \textit{Logistic Regression \& Ranking}}
+
+
+```{r eval=TRUE}
+# Step 1 -> Read data into R workstation
+# RCurl is the R package to read csv file using a link
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+# str(AD)
+```
+
+
+```{r eval=TRUE}
+# Step 2 -> Data preprocessing
+# Create your X matrix (predictors) and Y vector (outcome variable)
+X <- AD[,2:16]
+Y <- AD$DX_bl
+
+# The following code makes sure the variable "DX_bl" is a "factor". 
+# It denotes "0" as "c0" and "1" as "c1", to highlight the fact 
+# that "DX_bl" is a factor variable, not a numerical variable.
+
+Y <- paste0("c", Y)
+# as.factor is to convert any variable into the 
+# format as "factor" variable.
+Y <- as.factor(Y) 
+
+# Then, we integrate everything into a data frame
+data <- data.frame(X,Y)
+names(data)[16] = c("DX_bl")
+
+set.seed(1) # generate the same random sequence
+# Create a training data (half the original data size)
+train.ix <- sample(nrow(data),floor( nrow(data)/2) )
+data.train <- data[train.ix,]
+# Create a testing data (half the original data size)
+data.test <- data[-train.ix,]
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Step 3 -> Use glm() function to build a full model 
+# with all predictors
+logit.AD.full <- glm(DX_bl~., data = data.train,
+                     family = "binomial")
+summary(logit.AD.full)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Step 4 -> use step() to automatically delete 
+# all the insignificant
+# variables
+# Also means, automatic model selection
+logit.AD.reduced <- step(logit.AD.full, direction="both",
+                         trace = 0)
+summary(logit.AD.reduced)
+```
+
+
+```{r eval=TRUE}
+# Step 4 continued
+anova(logit.AD.reduced,logit.AD.full,test = "LRT")
+# The argument, test = "LRT", means that the p-value 
+# is derived via the Likelihood Ratio Test (LRT).
+```
+
+
+```{r eval=TRUE, tidy= FALSE}
+# Step 5 -> test the significance of the logistic model
+# Test residual deviance for lack-of-fit 
+# (if > 0.10, little-to-no lack-of-fit)
+dev.p.val <- 1 - pchisq(logit.AD.reduced$deviance,
+                        logit.AD.reduced$df.residual)
+```
+
+
+```{r eval=TRUE}
+dev.p.val
+```
+
+
+```{r eval=TRUE}
+# Step 6 -> Predict on test data using your 
+# logistic regression model
+y_hat <- predict(logit.AD.reduced, data.test)
+```
+
+
+```{r eval=TRUE}
+# Step 7 -> Evaluate the prediction performance of 
+# your logistic regression model
+# (1) Three main metrics for classification: Accuracy, 
+# Sensitivity (1- False Positive), 
+# Specificity (1 - False Negative)
+y_hat2 <- y_hat
+y_hat2[which(y_hat > 0)] = "c1" 
+# Since y_hat here is the values from the linear equation 
+# part of the logistic regression model, by default, 
+# we should use 0 as a cut-off value (only by default, 
+# not optimal though), i.e., if y_hat < 0, we name it 
+# as one class, and if y_hat > 0, it is another class.
+y_hat2[which(y_hat < 0)] = "c0"
+
+library(caret) 
+# confusionMatrix() in the package "caret" is a powerful 
+# function to summarize the prediction performance of a 
+# classification model, reporting metrics such as Accuracy, 
+# Sensitivity (1- False Positive), 
+# Specificity (1 - False Negative), to name a few.
+library(e1071)
+confusionMatrix(table(y_hat2, data.test$DX_bl))
+
+# (2) ROC curve is another commonly reported metric for 
+# classification models
+library(pROC) 
+# pROC has the roc() function that is very useful here
+plot(roc(data.test$DX_bl, y_hat),
+     col="blue", main="ROC Curve")
+```
+
+
+```{r eval=TRUE}
+## coefficients and 95% CI
+cbind(coef = coef(logit.AD.reduced), confint(logit.AD.reduced))
+```
+
+
+```{r eval=TRUE}
+# Remark: how to obtain the 95% CI of the predictions
+y_hat <- predict(logit.AD.reduced, data.test, type = "link", 
+                 se.fit = TRUE) 
+# se.fit = TRUE, is to get the standard error in the predictions, 
+# which is necessary information for us to construct 
+# the 95% CI of the predictions
+data.test$fit    <- y_hat$fit
+data.test$se.fit <- y_hat$se.fit
+# We can readily convert this information into the 95\% CIs 
+# of the predictions (the way these 95\% CIs are 
+# derived are again, only in approximated sense).
+# CI for fitted values
+data.test <- within(data.test, {
+# added "fitted" to make predictions at appended temp values
+fitted    = exp(fit) / (1 + exp(fit))
+fit.lower = exp(fit - 1.96 * se.fit) / (1 + 
+                                          exp(fit - 1.96 * se.fit))
+fit.upper = exp(fit + 1.96 * se.fit) / (1 + 
+                                          exp(fit + 1.96 * se.fit))
+})
+```
+
+
+```{r eval=TRUE}
+## odds ratios and 95% CI
+exp(cbind(OR = coef(logit.AD.reduced), 
+          confint(logit.AD.reduced)))
+```
+
+
+```{r eval=TRUE}
+# Fit a logistic regression model with FDG
+logit.AD.FDG <- glm(DX_bl ~ FDG, data = AD, family = "binomial")
+summary(logit.AD.FDG)
+```
+
+
+```{r eval=TRUE,  tidy =FALSE}
+logit.AD.FDG <- glm(DX_bl ~   FDG, data = data.train,
+                    family = "binomial")
+y_hat <- predict(logit.AD.FDG, data.test, type = "link",
+                 se.fit = TRUE)
+data.test$fit    <- y_hat$fit
+data.test$se.fit <- y_hat$se.fit
+
+# CI for fitted values
+data.test <- within(data.test, {
+# added "fitted" to make predictions at appended temp values
+  fitted    = exp(fit) / (1 + exp(fit))
+  fit.lower = exp(fit - 1.96 * se.fit) / (1 + exp(fit - 1.96 *
+                                                    se.fit))
+  fit.upper = exp(fit + 1.96 * se.fit) / (1 + exp(fit + 1.96 *
+                                                    se.fit))
+})
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(ggplot2)
+newData <- data.test[order(data.test$FDG),]
+newData$DX_bl = as.numeric(newData$DX_bl)
+newData$DX_bl[which(newData$DX_bl==1)] = 0
+newData$DX_bl[which(newData$DX_bl==2)] = 1
+newData$DX_bl = as.numeric(newData$DX_bl)
+p <- ggplot(newData, aes(x = FDG, y = DX_bl))
+# predicted curve and point-wise 95\% CI
+p <- p + geom_ribbon(aes(x = FDG, ymin = fit.lower,
+                         ymax = fit.upper), alpha = 0.2)
+p <- p + geom_line(aes(x = FDG, y = fitted), colour="red")
+# fitted values
+p <- p + geom_point(aes(y = fitted), size=2, colour="red")
+# observed values
+p <- p + geom_point(size = 2)
+p <- p + ylab("Probability") + theme(text = element_text(size=18))
+p <- p + labs(title =
+                "Observed and predicted probability of disease")
+print(p)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# install.packages("reshape2")
+require(reshape2)
+data.train$ID <- c(1:dim(data.train)[1])
+AD.long <- melt(data.train[,c(1,3,4,5,6,16,17)],
+                id.vars = c("ID", "DX_bl"))
+# Plot the data using ggplot
+require(ggplot2)
+p <- ggplot(AD.long, aes(x = factor(DX_bl), y = value))
+# boxplot, size=.75 to stand out behind CI
+p <- p + geom_boxplot(size = 0.75, alpha = 0.5)
+# points for observed data
+p <- p + geom_point(position = position_jitter(w = 0.05, h = 0),
+                    alpha = 0.1)
+# diamond at mean for each group
+p <- p + stat_summary(fun = mean, geom = "point", shape = 18,
+                      size = 6, alpha = 0.75, colour = "red")
+# confidence limits based on normal distribution
+p <- p + stat_summary(fun.data = "mean_cl_normal",
+                      geom = "errorbar", width = .2, alpha = 0.8)
+p <- p + facet_wrap(~ variable, scales = "free_y", ncol = 3)
+p <- p + labs(title =
+    "Boxplots of variables by diagnosis (0 - normal; 1 - patient)")
+print(p)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+library(dplyr)
+library(tidyr)
+library(randomForest)
+library(ggplot2)
+
+theme_set(theme_gray(base_size = 15) )
+
+# define monitoring function. data0: reference data;
+# data.real.time: real-time data; wsz: window size
+Monitoring <- function( data0, data.real.time, wsz ){
+num.data.points <- nrow(data.real.time)
+stat.mat <- NULL
+importance.mat <- NULL
+
+for( i in 1:num.data.points  ){
+# at the start of monitoring, when real-time data size is 
+# smaller than the window size, combine the real-time
+# data points and random samples from the reference data
+# to form a data set of wsz
+if(i<wsz){
+# sample.size.from.reference (ssfr)
+  ssfr <- wsz - i
+  sample.reference <- data0[sample(nrow(data0),
+                                 ssfr,replace = TRUE), ]
+  current.real.time.data <- rbind(sample.reference,
+                            data.real.time[1:i,,drop=FALSE])
+}else{
+  current.real.time.data <-  data.real.time[(i-wsz+
+                                     1):i,,drop=FALSE]
+}
+current.real.time.data$class <- 1
+data <- rbind( data0, current.real.time.data )
+colnames(data) <- c(paste0("X",1:(ncol(data)-1)),
+                    "Class")
+data$Class <- as.factor(data$Class)
+
+# apply random forests to the data
+my.rf <- randomForest(Class ~ .,sampsize=c(wsz,wsz), data=data)
+
+# get importance score
+importance.mat <- rbind(importance.mat, t(my.rf$importance))
+# get monitoring statistics
+ooblist <- my.rf[5]
+oobcolumn=matrix(c(ooblist[[1]]),2:3)
+ooberrornormal= (oobcolumn[,3])[1]
+ooberrorabnormal=(oobcolumn[,3])[2]
+
+temp=my.rf[6]
+p1vote <- mean(temp$votes[,2][(nrow(data0)+1):nrow(data)])
+
+this.stat <- c(ooberrornormal,ooberrorabnormal,p1vote)
+stat.mat <- rbind(stat.mat, this.stat)
+}
+result <- list(importance.mat = importance.mat,
+               stat.mat = stat.mat)
+return(result)
+}
+```
+
+
+```{r eval=TRUE}
+# data generation
+# sizes of reference data, real-time data without change, 
+# and real-time data with changes
+length0 <- 100
+length1 <- 100
+length2 <- 100
+
+# 2-dimension
+dimension <- 2
+
+# reference data
+data0 <- rnorm( dimension * length0, mean = 0, sd = 1)
+# real-time data with no change
+data1 <- rnorm( dimension * length2, mean = 0, sd = 1)
+# real-time data different from the reference data in the 
+# second the variable
+data2 <- cbind( V1 = rnorm( 1 * length1, mean = 0, sd = 1), 
+                V2 = rnorm( 1 * length1, mean = 2, sd = 1) )
+
+# convert to data frame
+data0 <- matrix(data0, nrow = length0, byrow = TRUE) %>% 
+  as.data.frame()
+data1 <- matrix(data1, nrow = length2, byrow = TRUE) %>% 
+  as.data.frame()
+data2 <- data2 %>% as.data.frame()
+
+# assign variable names
+colnames( data0 ) <- paste0("X",1:ncol(data0))
+colnames( data1 ) <- paste0("X",1:ncol(data1))
+colnames( data2 ) <- paste0("X",1:ncol(data2))
+
+# assign reference data with class 0 and real-time data with class 1
+data0 <- data0 %>% mutate(class = 0)
+data1 <- data1 %>% mutate(class = 1)
+data2 <- data2 %>% mutate(class = 1)
+
+# real-time data consists of normal data and abnormal data
+data.real.time <- rbind(data1,data2)
+```
+
+
+```{r eval=TRUE,tidy=FALSE}
+data.plot <- rbind( data0, data1 ) %>% mutate(class = factor(class))
+ggplot(data.plot, aes(x=X1, y=X2, shape = class, color=class)) + 
+  geom_point(size=3)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+data.plot <- rbind( data0, data2 ) %>% mutate(class = factor(class))
+ggplot(data.plot, aes(x=X1, y=X2, shape = class,
+                      color=class)) + geom_point(size=3)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+wsz <- 10
+result <- Monitoring( data0, data.real.time, wsz )
+stat.mat <- result$stat.mat
+importance.mat <- result$importance.mat
+
+# plot different monitor statistics
+stat.mat <- data.frame(stat.mat)
+stat.mat$id <- 1:nrow(stat.mat)
+colnames(stat.mat) <- c("error0","error1","prob","id")
+stat.mat <- stat.mat %>% gather(type, statistics, error0,
+                                error1,prob)
+ggplot(stat.mat,aes(x=id,y=statistics,color=type)) + 
+  geom_line(linetype = "dashed") + geom_point() +
+  geom_point(size=2)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# plot importance scores for diagnosis
+importance.mat <- data.frame(importance.mat)
+importance.mat$id <- 1:nrow(importance.mat)
+colnames(importance.mat) <- c("X1","X2","id")
+importance.mat <- importance.mat %>% 
+  gather(variable, importance,X1,X2)
+ggplot(importance.mat,aes(x=id,y=importance,
+    color=variable)) + geom_line(linetype = "dashed") +
+    geom_point(size=2)
+```
+
+
+```{r eval=TRUE}
+# 10-dimensions, with 2 variables being changed from 
+# the normal condition
+dimension <- 10
+wsz <- 5
+# reference data
+data0 <- rnorm( dimension * length0, mean = 0, sd = 1)
+# real-time data with no change
+data1 <- rnorm( dimension * length1, mean = 0, sd = 1)
+# real-time data different from the reference data in the 
+# second the variable
+data2 <- c( rnorm( (dimension - 2) * length2, mean = 0, sd = 1), 
+            rnorm( (2) * length2, mean = 20, sd = 1))
+
+
+# convert to data frame
+data0 <- matrix(data0, nrow = length0, byrow = TRUE) %>% 
+  as.data.frame()
+data1 <- matrix(data1, nrow = length1, byrow = TRUE) %>% 
+  as.data.frame()
+data2 <- matrix(data2, ncol = 10, byrow = FALSE) %>% 
+  as.data.frame()
+
+# assign reference data with class 0 and real-time data 
+# with class 1
+data0 <- data0 %>% mutate(class = 0)
+data1 <- data1 %>% mutate(class = 1)
+data2 <- data2 %>% mutate(class = 1)
+
+# real-time data consists of normal data and abnormal data
+data.real.time <- rbind(data1,data2)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+result <- Monitoring( data0, data.real.time, wsz )
+stat.mat <- result$stat.mat
+importance.mat <- result$importance.mat
+
+# plot different monitor statistics
+stat.mat <- data.frame(stat.mat)
+stat.mat$id <- 1:nrow(stat.mat)
+colnames(stat.mat) <- c("error0","error1","prob","id")
+stat.mat <- stat.mat %>% gather(type, statistics, error0,
+                                error1,prob)
+ggplot(stat.mat,aes(x=id,y=statistics,color=type))+
+  geom_line(linetype = "dashed") + geom_point() +
+                                      geom_point(size=2)
+```
+
+
+```{r eval=TRUE, tidy =FALSE}
+# plot importance scores for diagnosis
+importance.mat <- data.frame(importance.mat)
+importance.mat$id <- 1:nrow(importance.mat)
+# colnames(importance.mat) <- c("X1","X2","id")
+importance.mat <- importance.mat %>% 
+  gather(variable, importance,X1:X10)
+importance.mat$variable <- factor( importance.mat$variable,
+                                   levels = paste0( "X", 1:10))
+# levels(importance.mat$variable) <- paste0( "X", 1:10  )
+ggplot(importance.mat,aes(x=id,y=importance,color=
+          variable)) + geom_line(linetype = "dashed") +
+          geom_point(size=2)
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+# Create the frequency table in accordance of categorization
+# of HippoNV
+temp = quantile(AD$HippoNV,seq(from = 0.05, to = 0.95,
+                                          by = 0.05))
+AD$HippoNV.category <- cut(AD$HippoNV, breaks=c(-Inf,
+                                              temp, Inf))
+tempData <- data.frame(xtabs(~DX_bl + HippoNV.category, 
+                              data = AD))
+tempData <- tempData[seq(from = 2, to = 
+                   2*length(unique(AD$HippoNV.category)), 
+                   by = 2),]
+summary(xtabs(~DX_bl + HippoNV.category, data = AD))
+tempData$Total <- colSums(as.matrix(xtabs(~DX_bl +
+                    HippoNV.category,data = AD)))
+tempData$p.hat <- 1 - tempData$Freq/tempData$Total
+tempData$HippoNV.category = as.numeric(tempData$HippoNV.category)
+str(tempData)
+```
+
+
+```{r eval=TRUE}
+# Draw the scatterplot of HippoNV.category 
+# versus the probability of normal
+library(ggplot2)
+p <- ggplot(tempData, aes(x = HippoNV.category, y = p.hat))
+p <- p + geom_point(size=3)
+p <- p + geom_smooth(method = "loess")
+p <- p + labs(title ="Empirically observed probability of normal"
+              , xlab = "HippoNV")
+print(p)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+require(rpart)
+ndata <- 2000
+X1 <- runif(ndata, min = 0, max = 1)
+X2 <- runif(ndata, min = 0, max = 1)
+data <- data.frame(X1,X2)
+data <- data %>% mutate( X12 = 0.5 * (X1 - X2), Y =
+                           ifelse(X12>=0,1,0))
+ix <- which( abs(data$X12) <= 0.05)
+data$Y[ix] <- ifelse(runif( length(ix)) < 0.5, 0, 1)
+data <- data  %>% select(-X12) %>%  mutate(Y =
+                          as.factor(as.character(Y)))
+ggplot(data,aes(x=X1,y=X2,color=Y))+geom_point()
+linear_model <- glm(Y ~  ., family = binomial(link = "logit"),
+                                                  data = data)
+tree_model <- rpart( Y ~  ., data = data)
+pred_linear <- predict(linear_model, data,type="response")
+pred_tree <- predict(tree_model, data,type="prob")[,1]
+data_pred <- data %>% mutate(pred_linear_class =
+    ifelse(pred_linear <0.5,0,1)) %>%mutate(pred_linear_class =
+    as.factor(as.character(pred_linear_class)))%>%
+    mutate(pred_tree_class = ifelse( pred_tree <0.5,0,1)) %>%
+    mutate( pred_tree_class =
+                      as.factor(as.character(pred_tree_class)))
+ggplot(data_pred,aes(x=X1,y=X2,color=pred_linear_class))+
+  geom_point()
+ggplot(data_pred,aes(x=X1,y=X2,color=pred_tree_class))+
+  geom_point()
+```
+
+
+```{r eval=TRUE}
+# AGE, PTGENDER and PTEDUCAT are used as the 
+# predictor variables. 
+# MMSCORE (a numeric value) is the outcome.
+
+# Step 1: read data into R
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+AD <- read.csv(text=getURL(url))
+# Step 2: data preprocessing
+X <- AD[,2:16]
+Y <- AD$MMSCORE
+data <- data.frame(X,Y)
+names(data)[16] <- c("MMSCORE")
+
+# Create a training data (half the original data size)
+train.ix <- sample(nrow(data),floor( nrow(data)/2) )
+data.train <- data[train.ix,]
+# Create a testing data (half the original data size)
+data.test <- data[-train.ix,]
+
+# Step 3: build the tree
+# for regression problems, use method="anova"
+tree_reg <- rpart( MMSCORE ~  ., data.train, method="anova") 
+
+# Step 4: draw the tree
+require(rpart.plot)
+prp(tree_reg, nn.cex=1)
+
+# Step 5 -> prune the tree
+tree_reg <- prune(tree_reg,cp=0.03)
+prp(tree_reg,nn.cex=1)
+
+# Step 6 -> Predict using your tree model
+pred.tree <- predict(tree_reg, data.test)
+cor(pred.tree, data.test$MMSCORE)
+#For regression model, you can use correlation 
+# to measure how close are your predictions 
+# with the true outcome values of the data points
+
+```
+

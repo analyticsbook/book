@@ -1,0 +1,441 @@
+
+\chapter{Chapter 10: Synthesis \newline \textit{Architecture \& Pipeline}}
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 1 -> Read data into R workstation
+
+library(RCurl)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/KR.csv")
+data <- read.csv(text=getURL(url))
+# str(data)
+
+# Step 2 -> Data preprocessing
+# Create X matrix (predictors) and Y vector (outcome variable)
+X <- data$x
+Y <- data$y
+
+# Create a training data 
+train.ix <- sample(nrow(data),floor( nrow(data) * 4/5) )
+data.train <- data[train.ix,]
+# Create a testing data 
+data.test <- data[-train.ix,]
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 3 -> gather a list of candidate models
+
+# NN model with one hidden layer and different # of nodes
+
+# model1: neuralnet(y~x, data=data, hidden=c(3)) 
+# model2: neuralnet(y~x, data=data, hidden=c(5)) 
+# model3: neuralnet(y~x, data=data, hidden=c(8)) 
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 4 -> cross-validation for model evaluation 
+
+n_folds = 10 # number of folds
+# the sample size, N, of the dataset
+N <- dim(data.train)[1] 
+
+
+folds_i <- sample(rep(1:n_folds, length.out = N)) 
+library(neuralnet)
+
+# cv_mse records the prediction error for each fold
+cv_mse <- NULL 
+for (k in 1:n_folds) {
+  # In each iteration of the n_folds iterations
+  test_i <- which(folds_i == k) 
+  # This is the testing data, from the ith fold
+  data.test.cv <- data.train[test_i, ]  
+  # Then, the remaining data form the training data
+  data.train.cv <- data.train[-test_i, ] 
+  # Fit the neural network model with one hidden layer of 3
+  model1 <- neuralnet(y~x, data=data, hidden=c(3)) 
+  # Predict on the testing data using the trained model
+  pred <- compute (model1, data.test.cv)  
+  y_hat <- pred$net.result
+  model1$y_hat <- y_hat
+  # get the true y values for the testing data
+  true_y <- data.test.cv$y 
+  # mean((true_y - y_hat)^2): mean squared error (MSE). 
+  # The smaller this error, the better your model is
+  cv_mse[k] <- mean((true_y - y_hat)^2)    
+}
+mean(cv_mse)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Use visual inspection to assist the model selection. 
+
+# Predict on the testing data using the trained model
+pred <- compute(model1, data.train)  
+y_hat <- pred$net.result
+model1$y_hat <- y_hat
+# Predict on the testing data using the trained model
+pred <- compute(model2, data.train)  
+y_hat <- pred$net.result
+model2$y_hat <- y_hat
+# Predict on the testing data using the trained model
+pred <- compute(model3, data.train) 
+y_hat <- pred$net.result
+model3$y_hat <- y_hat
+
+
+plot(y ~ x, data = data.train, col = "gray", lwd = 2)
+lines(data.train$x, model1$y_hat,lwd = 3, col = "darkorange")
+lines(data.train$x, model2$y_hat,lwd = 3, col = "blue")
+lines(data.train$x, model3$y_hat,lwd = 3, col = "black")
+legend(x = "topright", legend = c("NN (3 hidden nodes)", 
+            "NN (5 hidden nodes)", "NN (8 hidden nodes)"), 
+       lwd = rep(3, 4), col = c("darkorange", "blue", "black"), 
+       text.width = 32, cex = 0.85)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 5 -> After model selection, build your final model
+nn.final <- neuralnet(y~x, data=data.train, hidden=c(5)) # 
+plot(fit) # Draw the architecture of the NN model
+
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 6 -> Evaluate the prediction performance of your model
+# Predict on the testing data using the trained model
+pred <- compute(nn.final, data.test)  
+y_hat <- pred$net.result 
+# get the true y values for the testing data
+true_y <- data.test$y  
+# mean((true_y - y_hat)^2): mean squared error (MSE). 
+# The smaller this error, the better your model is
+mse <- mean((true_y - y_hat)^2)    
+print(mse)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+install.packages("devtools") # install devtools
+devtools::install_github("rstudio/keras") # install Keras
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 1 -> Read digits classification data 
+library(keras)
+mnist <- dataset_mnist()
+
+# Step 2 -> Data preprocessing
+# code adapted from 
+# keras.rstudio.com/articles/examples/mnist_cnn.html
+# Input image dimensions
+img_rows <- 28
+img_cols <- 28
+num_classes <- 10
+
+# The data, shuffled and split between training and testing sets
+x_train <- mnist$train$x
+y_train <- mnist$train$y
+x_test <- mnist$test$x
+y_test <- mnist$test$y
+
+# Redefine  dimension of train/test inputs
+x_train <- array_reshape(x_train, 
+              c(nrow(x_train), img_rows, img_cols, 1))
+x_test <- array_reshape(x_test, 
+              c(nrow(x_test), img_rows, img_cols, 1))
+input_shape <- c(img_rows, img_cols, 1)
+
+# Transform RGB values into [0,1] range
+x_train <- x_train / 255
+x_test <- x_test / 255
+
+cat('x_train_shape:', dim(x_train), '\n')
+cat(nrow(x_train), 'train samples\n')
+cat(nrow(x_test), 'test samples\n')
+
+# Convert class vectors to binary class matrices
+y_train <- to_categorical(y_train, num_classes)
+y_test <- to_categorical(y_test, num_classes)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 3 -> gather a list of candidate models
+define_model <- function(kernel_size){
+  model <- keras_model_sequential() %>%
+    # convolution layer 1
+    layer_conv_2d(filters = 8, 
+        kernel_size = c(kernel_size,kernel_size), 
+        activation = 'relu',
+        input_shape = input_shape) %>% 
+    # pooling layer 1
+    layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+    # convolution layer 2
+    layer_conv_2d(filters = 16, 
+        kernel_size = c(kernel_size,kernel_size), 
+        activation = 'relu') %>% 
+    # pooling layer 2
+    layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+    # dense layers
+    layer_flatten() %>% 
+    layer_dense(units = 32, activation = 'relu') %>% 
+    layer_dense(units = num_classes, activation = 'softmax')
+  
+  # Compile model
+  model %>% compile(
+    loss = loss_categorical_crossentropy,
+    optimizer = optimizer_adadelta(),
+    metrics = c('accuracy')
+  )
+  return(model)
+}
+# define three models
+model_kernel_1 = define_model(kernel_size=2)
+model_kernel_2 = define_model(kernel_size=3)
+model_kernel_3 = define_model(kernel_size=5)
+
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 4 -> Use cross-validation for model evaluation
+
+# set upfunction for evaluating accuracy
+cv_accuracy <- function(n_folds, kernel_size,x_train,y_train){
+  N <- dim(x_train)[1] # the sample size, N, of the dataset
+  folds_i <- sample(rep(1:n_folds, length.out = N)) 
+  
+  accuracy_v <- NULL
+  for (k in 1:n_folds) {
+    # set up training and testing data
+    test_i <- which(folds_i == k)
+    x.train.cv <- x_train[-test_i,,,,drop=FALSE] 
+    x.test.cv <- x_train[test_i,,,,drop=FALSE]   
+    y.train.cv <- y_train[-test_i,,drop=FALSE ] 
+    y.test.cv <- y_train[test_i,,drop=FALSE ]
+   
+    model <- define_model(kernel_size)
+    model %>% fit(
+      x_train, y_train, batch_size = 128,
+      epochs = 2,validation_split = 0.2, verbose = 0
+    )
+    scores <- model %>% evaluate(
+    x.test.cv, y.test.cv, verbose = 0)
+    
+    accuracy_v <- c(accuracy_v, scores[2])
+  }
+  return(accuracy_v)
+}
+# get average accuracy for each model
+accuracy_v_kernel_1 <- 
+  cv_accuracy(n_folds=2,kernel_size=2,x_train,y_train)
+print(mean(accuracy_v_kernel_1))
+
+accuracy_v_kernel_2 <- 
+  cv_accuracy(n_folds=2,kernel_size=3,x_train,y_train)
+print(mean(accuracy_v_kernel_2))
+
+accuracy_v_kernel_3 <- 
+  cv_accuracy(n_folds=2,kernel_size=5,x_train,y_train)
+print(mean(accuracy_v_kernel_3))
+
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 5 -> After model selection, build your final model
+
+model <- define_model(5)
+model %>% fit(
+      x_train, y_train, batch_size = 128,
+      epochs = 2,validation_split = 0.2, verbose = 0
+    )
+
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# Step 6 -> Evaluate the prediction performance of your model
+scores <- model %>% evaluate(
+    x_test, y_test, verbose = 0)
+print(scores[2])
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+# visualize output for a layer
+
+# use the first image from testing data
+img <- x_test[1,,,]
+plot(as.raster(img))
+img <- x_test[1,,,,drop=FALSE]
+
+# define function to plot an image
+plot_image <- function(channel) {
+    rotate <- function(x) t(apply(x, 2, rev))
+    image(rotate(channel), axes = FALSE, asp = 1, 
+          col = gray.colors(12))
+}
+# plot the testing image
+plot_image(  1 - img[1,,,]   )
+
+# plot the output from the second layer 
+layer_number = 2
+
+# print layer name
+layer_name <- model$layers[[layer_number]]$name
+print(layer_name)
+
+layer_outputs <- lapply(model$layers[layer_number], 
+                        function(layer) layer$output)
+activation_model <- keras_model(inputs = model$input, 
+                                outputs = layer_outputs)
+# calculate the outputs from the layer for the image
+layer_activation <- activation_model %>% predict(img)
+
+# check dimension
+print(dim(layer_activation))
+
+# number of features
+n_features <- dim(layer_activation)[[4]] 
+# image width
+image_size <- dim(layer_activation)[[2]] 
+# number of columns and images per column 
+# (each column plots an image)
+n_cols <- n_features 
+images_per_col <- 1 #
+
+# plot n_cols of images
+op <- par(mfrow = c(n_cols, images_per_col), 
+            mai = rep_len(0, 4)) 
+
+# plot each image
+for (col in 0:(n_cols-1)) {
+        col_ix <- col + 1
+        channel_image <- layer_activation[1,,,col_ix]
+      plot_image(1-channel_image)
+}
+  
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+rm(list = ls(all = TRUE))
+library("arules")
+library("randomForest")
+library("RRF")
+library("inTrees")
+library("reshape")
+library("ggplot2")
+set.seed(1)
+url <- paste0("https://raw.githubusercontent.com",
+              "/analyticsbook/book/main/data/AD.csv")
+data <- read.csv(text=getURL(url))
+
+target_indx <- which(colnames(data) == "DX_bl")
+target <- paste0("class_", as.character(data[, target_indx]))
+rm_indx <- which(colnames(data) %in% 
+            c("DX_bl", "ID", "TOTAL13", "MMSCORE"))
+X <- data
+X <- X[, -rm_indx]
+for (i in 1:ncol(X)) X[, i] <- 
+      as.factor(dicretizeVector(X[, i], K = 3))
+
+## Use random forests to grow the trees
+rf <- randomForest(X, as.factor(target))
+
+# transform rf object to an inTrees' format
+treeList <- RF2List(rf)  
+exec <- extractRules(treeList, X)  # Extract the rules
+
+## The rules are measured by length, error and frequency.
+class <- paste0("class_", as.character(target))
+rules <- getRuleMetric(exec, X, target)
+```
+
+
+```{r eval=TRUE, tidy=FALSE}
+print(rules[order(as.numeric(rules[, "len"])), ][1:5, ])
+```
+
+
+```{r eval=TRUE,tidy= FALSE}
+rules.pruned <- pruneRule(rules, X, target, maxDecay = 0.005,
+                          typeDecay = 2)
+
+length <- data.frame(original = as.numeric(rules[, "len"]),
+                pruned = as.numeric(rules.pruned[,"len"]))
+
+## Visualize the result
+ggplot(melt(length), aes(value, fill = variable)) +
+  geom_histogram(position = "dodge",binwidth = 0.4) +
+  ggtitle("Histogram of Lengths") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r eval=TRUE,tidy=FALSE}
+frequency <- data.frame(
+                original = as.numeric(rules[, "freq"]),
+                pruned = as.numeric(rules.pruned[,"freq"]))
+ggplot(melt(frequency), aes(value, fill = variable)) +
+  geom_histogram(position = "dodge",binwidth = 0.05) +
+  ggtitle("Histogram of Frequencies") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+error <- data.frame(original = as.numeric(rules[, "err"]),
+                  pruned = as.numeric(rules.pruned[,"err"]))
+
+## Visualize the result
+ggplot(melt(error), aes(value, fill = variable)) +
+  geom_histogram(position = "dodge",binwidth = 0.01) +
+  ggtitle("Histogram of Errors") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+rules.selected <- selectRuleRRF(rules.pruned, X, target)
+rules.present <- presentRules(rules.selected, colnames(X))
+
+## See the specific contents of the selected rules
+print(cbind(ID = 1:nrow(rules.present), 
+            rules.present[, c("condition", "pred")]))
+```
+
+
+```{r eval = FALSE, tidy = FALSE}
+print(cbind(ID = 1:nrow(rules.present),
+            rules.present[, c("len", "freq", "err")]))
+```
+
+
+```{r eval=TRUE, tidy = FALSE}
+library(EBImage)
+readImage(system.file("images", "sample-color.png", 
+                      package="EBImage"))
+```
+
+
+```{r eval = FALSE, tidy = FALSE}
+kernel = matrix(1, nc=3, nr=3)
+kernel[2,2] = -8
+```
+
+
+
+
+
