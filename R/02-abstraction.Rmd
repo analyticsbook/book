@@ -113,7 +113,6 @@ print(p)
 ```
 
 
-
 ```{r eval=TRUE}
 p <- ggplot(AD[which(AD$AGE < 60),], 
             aes(x = PTEDUCAT, y = MMSCORE))
@@ -122,6 +121,7 @@ p <- p + geom_smooth(method = lm)
 p <- p + labs(title="MMSE versus PTEDUCAT when AGE < 60")
 print(p)
 ```
+
 
 ```{r eval=TRUE}
 p <- ggplot(AD[which(AD$AGE > 80),], 
@@ -156,7 +156,6 @@ url <- paste0("https://raw.githubusercontent.com",
 data <- read.csv(text=getURL(url))
 ```
 
-\textbf{Step 2} is about data preprocessing.
 
 ```{r eval=TRUE, tidy=FALSE}
 # Step 2 -> Data preprocessing
@@ -188,7 +187,6 @@ data.test <- data[-train.ix,]
 ```
 
 
-\textbf{Step 3} is to use the `rpart()` function in the R package `rpart` to build the decision tree.
 ```{r eval=TRUE, tidy=FALSE}
 # Step 3 -> use rpart to build the decision tree.
 tree <- rpart(DX_bl ~ ., data = data.train)
@@ -233,6 +231,7 @@ lm.AD.age <- lm(MMSCORE ~ AGE, data = AD)
 summary(lm.AD.age)
 ```
 
+
 ```{r eval=TRUE, tidy = FALSE}
 # fit the multiple linear regression model 
 # with more than one predictor
@@ -240,6 +239,4 @@ lm.AD.demo <- lm(MMSCORE ~  AGE + PTGENDER + PTEDUCAT,
                   data = AD)
 summary(lm.AD.demo)
 ```
-
-
 
