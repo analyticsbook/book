@@ -2,7 +2,7 @@
 \chapter{Chapter 7: Learning (II) \newline \textit{SVM \& Ensemble Learning}}
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # For the toy problem
 x = matrix(c(-1,-1,1,1,-1,1,-1,1), nrow = 4, ncol = 2)
 y = c(-1,1,1,-1)
@@ -18,7 +18,7 @@ print(p)
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # Train a nonlinear SVM model 
 # polynomial kernel function with `df=2`
 x <- cbind(1, poly(x, degree = 2, raw = TRUE))
@@ -31,14 +31,14 @@ linear.svm <- ksvm(y ~ ., data=linear.train,
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 alpha(linear.svm) #scaled alpha vector
 ## [[1]]
 ## [1] 0.125 0.125 0.125 0.125
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # Step 1 -> Read data into R workstation
 
 library(RCurl)
@@ -65,7 +65,7 @@ data.test <- data[-train.ix,]
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # Step 3 -> gather a list of candidate models
 # SVM: often to compare models with different kernels, 
 # different values of C, different set of variables
@@ -80,7 +80,7 @@ model4 <- as.formula(DX_bl ~ FDG + AV45 + HippoNV)
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # Step 4 -> Use 10-fold cross-validation to evaluate the models
 
 n_folds = 10 
@@ -123,13 +123,13 @@ linear.svm <- ksvm(model2, data=data.train,
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # Step 6 -> Predict using your SVM model
 y_hat <- predict(linear.svm, data.test) 
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 # Step 7 -> Evaluate the prediction performance of the SVM model
 
 # (1) The confusion matrix
@@ -145,7 +145,7 @@ plot(roc(data.test$DX_bl, y_hat),
 ```
 
 
-```{r eval=FALSE}
+```{r eval=TRUE}
 library(RCurl)
 url <- paste0("https://raw.githubusercontent.com",
               "/analyticsbook/book/main/data/AD.csv")
@@ -190,7 +190,7 @@ svm.tune
 ```
 
 
-```{r eval=FALSE, tidy = FALSE}
+```{r eval=TRUE, tidy = FALSE}
 theme_set(theme_gray(base_size = 15))
 
 library(RCurl)
@@ -259,7 +259,7 @@ ggplot() + geom_boxplot(data = err.mat %>%
 ```
 
 
-```{r eval=FALSE, tidy = FALSE}
+```{r eval=TRUE, tidy = FALSE}
 err.mat <- NULL
 set.seed(1)
 for (i in 1:nrow(testing.indices)) {
@@ -294,7 +294,7 @@ ggplot() + geom_boxplot(data = err.mat %>%
 ```
 
 
-```{r eval=FALSE, tidy = FALSE}
+```{r eval=TRUE, tidy = FALSE}
 err.mat <- NULL
 set.seed(1)
 for (i in 1:nrow(testing.indices)) {
@@ -324,7 +324,7 @@ ggplot() + geom_boxplot(data =
 ```
 
 
-```{r eval=FALSE, tidy = FALSE}
+```{r eval=TRUE, tidy = FALSE}
 err.mat <- NULL
 set.seed(1)
 for (i in 1:nrow(testing.indices)) {
@@ -356,7 +356,7 @@ ggplot() + geom_boxplot(data = err.mat %>%
 ```
 
 
-```{r eval=FALSE, tidy = FALSE}
+```{r eval=TRUE, tidy = FALSE}
 err.mat <- NULL
 set.seed(1)
 for (i in 1:nrow(testing.indices)) {
