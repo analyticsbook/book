@@ -31,7 +31,7 @@ model4 <- "MMSCORE ~ FDG + AV45 + HippoNV"
 ```
 
 
-```{r eval = FALSE, tidy =FALSE}
+```{r eval = TRUE, tidy =FALSE}
 # Step 4 -> Use 10-fold cross-validation to evaluate all models
 
 # First, let me use 10-fold cross-validation to evaluate the
