@@ -3,4 +3,4 @@ Code and data for book: Huang, S. and Deng, H., 2021. Data Analytics: A Small Da
 
 [Book website](https://dataanalyticsbook.info/) (free)
 
-[Amazon](https://www.amazon.com/Data-Analytics-Approach-Chapman-Science/dp/0367609509)
+[Amazon](https://amzn.to/3ZHHYWb)
